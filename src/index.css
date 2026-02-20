@@ -1,0 +1,151 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Global CSS
+ * 레이아웃 구조 및 공통 컴포넌트 스타일
+ * 색상/사이즈 변경은 tailwind.config.ts 참조
+ */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-family:
+      'Pretendard',
+      -apple-system,
+      BlinkMacSystemFont,
+      'Segoe UI',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 스크롤바 스타일링 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d1d5db;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #9ca3af;
+  }
+}
+
+@layer components {
+  /* ── 버튼 ───────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium
+           transition-colors duration-150 cursor-pointer select-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-white hover:bg-brand-dark;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-text-primary border border-border hover:bg-surface-hover;
+  }
+  .btn-ghost {
+    @apply btn text-text-secondary hover:bg-surface-hover hover:text-text-primary;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded
+           text-text-secondary hover:bg-surface-hover hover:text-text-primary
+           transition-colors duration-150 cursor-pointer;
+  }
+
+  /* ── 카드 ───────────────────────────────────────── */
+  .card {
+    @apply bg-surface-card rounded-lg border border-border shadow-card p-4;
+  }
+
+  /* ── 배지 / Pill ────────────────────────────────── */
+  .pill {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+  }
+  .pill-todo {
+    @apply pill bg-gray-100 text-status-todo;
+  }
+  .pill-in-progress {
+    @apply pill bg-amber-50 text-status-in-progress;
+  }
+  .pill-in-review {
+    @apply pill bg-violet-50 text-status-in-review;
+  }
+  .pill-done {
+    @apply pill bg-emerald-50 text-status-done;
+  }
+  .pill-urgent {
+    @apply pill bg-red-50 text-status-urgent;
+  }
+  .pill-high {
+    @apply pill bg-orange-50 text-orange-600;
+  }
+  .pill-medium {
+    @apply pill bg-blue-50 text-blue-600;
+  }
+  .pill-low {
+    @apply pill bg-gray-100 text-text-muted;
+  }
+
+  /* ── 입력 폼 ─────────────────────────────────────── */
+  .input {
+    @apply w-full px-3 py-1.5 text-sm rounded border border-border
+           bg-white text-text-primary placeholder:text-text-muted
+           focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent
+           transition-shadow duration-150;
+  }
+
+  .select {
+    @apply input pr-8 appearance-none cursor-pointer;
+  }
+
+  /* ── 모달 오버레이 ───────────────────────────────── */
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/40 z-50 flex items-center justify-center;
+  }
+  .modal-panel {
+    @apply bg-white rounded-xl shadow-modal w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden;
+  }
+  .modal-header {
+    @apply flex items-center justify-between px-5 py-4 border-b border-border bg-brand text-white;
+  }
+
+  /* ── 로딩 스피너 ─────────────────────────────────── */
+  .spinner {
+    @apply w-5 h-5 border-2 border-border border-t-brand rounded-full animate-spin;
+  }
+
+  /* ── 구분선 ──────────────────────────────────────── */
+  .divider {
+    @apply border-t border-border my-3;
+  }
+}
+
+@layer utilities {
+  /* 텍스트 클램프 */
+  .line-clamp-1 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
