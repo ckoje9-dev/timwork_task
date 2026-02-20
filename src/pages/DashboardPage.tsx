@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileStack, AlertCircle, Bookmark, MapPin } from 'lucide-react';
 import { getDashboard } from '@/api/dashboard';
 import type { DashboardData, RecentItem } from '@/types';
 import DonutChart from '@/components/dashboard/DonutChart';
+import { useDrawingStore } from '@/store/drawing.store';
 
 const ISSUE_CHART_SEGMENTS = (stats: DashboardData['issueStats']) => [
   { value: stats.todo, color: '#F97316', label: '할일' },
@@ -113,10 +114,23 @@ function RecentItemsCard({ recentItems }: { recentItems: RecentItem[] }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('recent');
 
-  const displayItems =
-    activeTab === 'recent'
-      ? recentItems
-      : recentItems.filter((item) => item.bookmarked);
+  const { bookmarkedDrawings, tree, selectDrawing } = useDrawingStore();
+
+  // store 북마크에서 표시 항목 생성
+  const storeBookmarks = useMemo(() => {
+    return [...bookmarkedDrawings].flatMap((key) => {
+      // key 형식: `${drawingId}-${discipline}` — discipline은 한글이므로 끝에서 매칭
+      const discipline = Object.keys(tree).find((d) => key.endsWith(`-${d}`));
+      if (!discipline) return [];
+      const drawingId = key.slice(0, key.length - discipline.length - 1);
+      const node = tree[discipline]?.find((n) => n.drawingId === drawingId);
+      const drawingName = node?.drawingName ?? drawingId;
+      const latestRevision = node?.latestRevision ?? null;
+      return [{ key, drawingId, discipline, drawingName, latestRevision }];
+    });
+  }, [bookmarkedDrawings, tree]);
+
+  const displayItems = activeTab === 'recent' ? recentItems : null;
 
   return (
     <div className="card flex flex-col">
@@ -143,32 +157,63 @@ function RecentItemsCard({ recentItems }: { recentItems: RecentItem[] }) {
       </div>
 
       {/* 항목 목록 */}
-      <div className="space-y-1 flex-1">
-        {displayItems.length === 0 ? (
-          <p className="text-xs text-text-muted py-4 text-center">항목이 없습니다</p>
-        ) : (
-          displayItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => navigate(item.type === 'drawing' ? '/drawings' : '/issues')}
-              className="w-full flex items-center gap-2 p-2 rounded hover:bg-surface-hover text-left group"
-            >
-              <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-                {item.type === 'drawing' ? (
-                  <FileStack size={14} className="text-brand" />
-                ) : (
-                  <AlertCircle size={14} className="text-status-urgent" />
-                )}
-              </div>
-              <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
-                {item.label}
-              </span>
-              {item.bookmarked && (
-                <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
-              )}
-              <span className="text-xs text-text-muted flex-shrink-0">{item.timestamp}</span>
-            </button>
-          ))
+      <div className="space-y-1 flex-1 overflow-y-auto max-h-[252px]">
+        {activeTab === 'recent' && (
+          <>
+            {(displayItems ?? []).length === 0 ? (
+              <p className="text-xs text-text-muted py-4 text-center">항목이 없습니다</p>
+            ) : (
+              (displayItems ?? []).map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => navigate(item.type === 'drawing' ? '/drawings' : '/issues')}
+                  className="w-full flex items-center gap-2 p-2 rounded hover:bg-surface-hover text-left group"
+                >
+                  <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                    {item.type === 'drawing' ? (
+                      <FileStack size={14} className="text-brand" />
+                    ) : (
+                      <AlertCircle size={14} className="text-status-urgent" />
+                    )}
+                  </div>
+                  <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
+                    {item.label}
+                  </span>
+                  {item.bookmarked && (
+                    <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
+                  )}
+                  <span className="text-xs text-text-muted flex-shrink-0">{item.timestamp}</span>
+                </button>
+              ))
+            )}
+          </>
+        )}
+
+        {activeTab === 'bookmark' && (
+          <>
+            {storeBookmarks.length === 0 ? (
+              <p className="text-xs text-text-muted py-4 text-center">북마크된 도면이 없습니다</p>
+            ) : (
+              storeBookmarks.map((bm) => (
+                <button
+                  key={bm.key}
+                  onClick={() => {
+                    selectDrawing(bm.drawingId, bm.discipline, bm.latestRevision?.version ?? '');
+                    navigate('/drawings');
+                  }}
+                  className="w-full flex items-center gap-2 p-2 rounded hover:bg-surface-hover text-left group"
+                >
+                  <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                    <FileStack size={14} className="text-brand" />
+                  </div>
+                  <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
+                    <span className="text-text-muted">[{bm.discipline}]</span> {bm.drawingName}
+                  </span>
+                  <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
+                </button>
+              ))
+            )}
+          </>
         )}
       </div>
     </div>
