@@ -1,11 +1,12 @@
 import { create } from 'zustand';
-import type { DrawingTreeByDiscipline, DrawingSelection, Revision } from '@/types';
+import type { DrawingTreeByDiscipline, DrawingSelection, Revision, ImageTransform } from '@/types';
 import { getDrawingTree, getDrawingById } from '@/api/drawings';
 
 export interface LayerItem {
   revision: Revision;
   opacity: number;
   color: string;
+  imageTransform?: ImageTransform;
 }
 
 export interface DisciplineGroup {
@@ -116,6 +117,8 @@ export const useDrawingStore = create<DrawingState>((set) => ({
           revision: rev,
           opacity: isSelected && idx === 0 ? 1 : 0.6,
           color: colors[idx % colors.length],
+          // revision 자체에 transform이 없으면 discipline 공통 transform 사용
+          imageTransform: rev.imageTransform ?? discData.imageTransform,
         }));
 
         // discipline.image가 있는데 revisions가 비어있으면 합성 레이어 추가
@@ -131,6 +134,7 @@ export const useDrawingStore = create<DrawingState>((set) => ({
             },
             opacity: 0.6,
             color: colors[0],
+            imageTransform: discData.imageTransform,
           }];
         }
 

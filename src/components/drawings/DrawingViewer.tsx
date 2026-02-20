@@ -138,6 +138,11 @@ export default function DrawingViewer() {
 
   const currentImage = getCurrentImage(selection, disciplineGroups, compareMode, baseDrawingImage);
 
+  // 비교 모드 기준 공종 레이어의 imageTransform (오버레이 정렬 기준)
+  const baseTx = compareMode
+    ? disciplineGroups.find((g) => g.discipline === selection?.discipline)?.layers[0]?.imageTransform
+    : undefined;
+
   if (!selection) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-text-muted gap-3">
@@ -196,23 +201,36 @@ export default function DrawingViewer() {
             const isSelectedGroup = group.discipline === selection.discipline;
             // 선택된 공종의 첫 번째 레이어는 베이스 이미지로 사용됨
             const overlayLayers = isSelectedGroup ? group.layers.slice(1) : group.layers;
-            return overlayLayers.map((layer) => (
-              <img
-                key={`${group.discipline}-${layer.revision.version}`}
-                src={getImageUrl(layer.revision.image)}
-                alt={`${group.discipline} ${layer.revision.version}`}
-                draggable={false}
-                className="absolute top-0 left-0 w-full h-full"
-                style={{
-                  opacity: layer.opacity,
-                  mixBlendMode: 'multiply',
-                  filter: `hue-rotate(${getHueRotate(layer.color)}deg) saturate(2)`,
-                  maxWidth: 'none',
-                  userSelect: 'none',
-                  pointerEvents: 'none',
-                }}
-              />
-            ));
+            return overlayLayers.map((layer) => {
+              // imageTransform으로 기준 이미지 대비 위치·스케일 계산
+              const overlayTx = layer.imageTransform;
+              let cssTransform: string | undefined;
+              if (baseTx && overlayTx && baseTx.scale !== 0 && overlayTx.scale !== 0) {
+                const displayScale = baseTx.scale / overlayTx.scale;
+                const lx = baseTx.x - overlayTx.x * displayScale;
+                const ly = baseTx.y - overlayTx.y * displayScale;
+                cssTransform = `translate(${lx}px, ${ly}px) scale(${displayScale})`;
+              }
+              return (
+                <img
+                  key={`${group.discipline}-${layer.revision.version}`}
+                  src={getImageUrl(layer.revision.image)}
+                  alt={`${group.discipline} ${layer.revision.version}`}
+                  draggable={false}
+                  className="absolute top-0 left-0"
+                  style={{
+                    transformOrigin: '0 0',
+                    transform: cssTransform,
+                    opacity: layer.opacity,
+                    mixBlendMode: 'multiply',
+                    filter: `hue-rotate(${getHueRotate(layer.color)}deg) saturate(2)`,
+                    maxWidth: 'none',
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                  }}
+                />
+              );
+            });
           })}
 
           {/* 전체 배치도: 자식 도면 폴리곤 클릭 영역 */}
