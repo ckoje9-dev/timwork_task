@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Search,
   ChevronRight,
+  ChevronDown,
   Upload,
   Download,
   RefreshCw,
@@ -9,17 +10,16 @@ import {
   Layers,
   Clock,
 } from 'lucide-react';
-import { useDrawingStore } from '@/store/drawing.store';
+import { useDrawingStore, type LayerItem } from '@/store/drawing.store';
 import type { DrawingSelection, DrawingTreeByDiscipline } from '@/types';
 import DrawingTree from '@/components/drawings/DrawingTree';
 import DrawingViewer from '@/components/drawings/DrawingViewer';
 import CompareModal from '@/components/drawings/CompareModal';
 
 export default function DrawingsPage() {
-  const { loadTree, selection, compareMode, disciplineGroups, tree, setCompareMode, expandDiscipline } = useDrawingStore();
+  const { loadTree, selection, compareMode, disciplineGroups, tree, setCompareMode, setRevisionVersion, expandDiscipline, issueVisible, setIssueVisible } = useDrawingStore();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterDiscipline, setFilterDiscipline] = useState('전체');
-  const [issueVisible, setIssueVisible] = useState(true);
 
   useEffect(() => {
     loadTree();
@@ -98,20 +98,16 @@ export default function DrawingsPage() {
 
           {/* 우측: rev 정보 + 액션 버튼 */}
           <div className="flex items-center gap-3">
-            {/* 선택된 도면의 rev + 날짜 */}
+            {/* 선택된 도면의 rev 피커 */}
             {selection && (() => {
               const selectedGroup = disciplineGroups.find((g) => g.discipline === selection.discipline);
-              const layer =
-                selectedGroup?.layers.find((l) => l.revision.version === selection.revisionVersion) ??
-                selectedGroup?.layers[0];
-              if (!layer) return null;
+              if (!selectedGroup || selectedGroup.layers.length === 0) return null;
               return (
-                <div className="flex items-center gap-1 text-xs text-text-muted border-r border-border pr-3">
-                  <Clock size={11} />
-                  <span>{layer.revision.version}</span>
-                  <span>·</span>
-                  <span>{layer.revision.date}</span>
-                </div>
+                <RevisionPicker
+                  layers={selectedGroup.layers}
+                  currentVersion={selection.revisionVersion}
+                  onSelect={setRevisionVersion}
+                />
               );
             })()}
             {compareMode && (
@@ -146,6 +142,85 @@ export default function DrawingsPage() {
           <CompareModal />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── 리비전 피커 ───────────────────────────────────────────────
+
+function RevisionPicker({
+  layers,
+  currentVersion,
+  onSelect,
+}: {
+  layers: LayerItem[];
+  currentVersion: string;
+  onSelect: (version: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 닫기
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  const current = layers.find((l) => l.revision.version === currentVersion) ?? layers[0];
+  if (!current) return null;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 text-xs text-text-muted hover:text-text-primary border-r border-border pr-3 transition-colors"
+      >
+        <Clock size={11} />
+        <span>{current.revision.version}</span>
+        <span>·</span>
+        <span>{current.revision.date}</span>
+        <ChevronDown
+          size={11}
+          className={`ml-0.5 transition-transform duration-150 ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-border rounded-lg shadow-lg py-1 min-w-[220px]">
+          {layers.map((layer) => {
+            const isActive = layer.revision.version === currentVersion;
+            return (
+              <button
+                key={layer.revision.version}
+                onClick={() => {
+                  onSelect(layer.revision.version);
+                  setOpen(false);
+                }}
+                className={[
+                  'w-full flex flex-col gap-0.5 px-3 py-2 text-left text-xs hover:bg-surface-hover transition-colors',
+                  isActive ? 'text-brand' : 'text-text-secondary',
+                ].join(' ')}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold">{layer.revision.version}</span>
+                  <span className={isActive ? 'text-brand/70' : 'text-text-muted'}>
+                    {layer.revision.date}
+                  </span>
+                </div>
+                {layer.revision.description && (
+                  <span className="text-text-muted truncate">{layer.revision.description}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

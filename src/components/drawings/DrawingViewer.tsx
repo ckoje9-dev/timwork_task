@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, Hand, ScanSearch } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, ScanSearch, MapPin, User } from 'lucide-react';
 import { getImageUrl, getChildDrawings } from '@/api/drawings';
-import { useDrawingStore, type DisciplineGroup } from '@/store/drawing.store';
+import { useDrawingStore, type DisciplineGroup, type IssuePin } from '@/store/drawing.store';
 import type { DrawingSelection, Drawing } from '@/types';
 
 interface Transform {
@@ -24,9 +24,10 @@ export default function DrawingViewer() {
   // ref로 드래그 시작 상태 관리 (재렌더링 없이 최신값 유지)
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; tx: number; ty: number } | null>(null);
 
-  const { selection, compareMode, disciplineGroups, baseDrawingImage, tree, selectDrawing } = useDrawingStore();
+  const { selection, compareMode, disciplineGroups, baseDrawingImage, tree, selectDrawing, issueVisible, issuePins, addIssuePin } = useDrawingStore();
   const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
   const [childDrawings, setChildDrawings] = useState<Drawing[]>([]);
+  const [isAddingIssue, setIsAddingIssue] = useState(false);
 
   // 전체 배치도일 때 자식 도면 목록 로드
   useEffect(() => {
@@ -59,6 +60,16 @@ export default function DrawingViewer() {
     setTransform({ x: 0, y: 0, scale: 1 });
   }, [selection?.drawingId, selection?.discipline, selection?.revisionVersion]);
 
+  // ESC 키로 이슈 배치 모드 취소
+  useEffect(() => {
+    if (!isAddingIssue) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsAddingIssue(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isAddingIssue]);
+
   // ── 드래그 중 window 레벨에서 이벤트 처리 ───────────────────
   useEffect(() => {
     if (!isDragging) return;
@@ -90,6 +101,7 @@ export default function DrawingViewer() {
   // ── 마우스 다운: 드래그 시작 ─────────────────────────────────
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    if (isAddingIssue) return; // 이슈 배치 모드에서는 드래그 비활성화
     e.preventDefault();
     dragStartRef.current = {
       mouseX: e.clientX,
@@ -98,7 +110,17 @@ export default function DrawingViewer() {
       ty: transform.y,
     };
     setIsDragging(true);
-  }, [transform.x, transform.y]);
+  }, [transform.x, transform.y, isAddingIssue]);
+
+  // ── 이슈 핀 배치 클릭 ────────────────────────────────────────
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    if (!isAddingIssue || !containerEl || !selection) return;
+    const rect = containerEl.getBoundingClientRect();
+    const imgX = (e.clientX - rect.left - transform.x) / transform.scale;
+    const imgY = (e.clientY - rect.top - transform.y) / transform.scale;
+    addIssuePin(selection.drawingId, selection.discipline, imgX, imgY);
+    setIsAddingIssue(false);
+  }, [isAddingIssue, containerEl, selection, transform, addIssuePin]);
 
   // ── 휠 줌 ──────────────────────────────────────────────────
   useEffect(() => {
@@ -159,8 +181,11 @@ export default function DrawingViewer() {
     >
       {/* 줌/패닝 영역 */}
       <div
-        className={`w-full h-full select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`w-full h-full select-none ${
+          isAddingIssue ? 'cursor-crosshair' : isDragging ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
         onMouseDown={handleMouseDown}
+        onClick={handleCanvasClick}
         onDragStart={(e) => e.preventDefault()}
       >
         {/* 변환 레이어 */}
@@ -287,6 +312,30 @@ export default function DrawingViewer() {
         </div>
       </div>
 
+      {/* 이슈 핀 오버레이 */}
+      {issueVisible && (
+        <div className="absolute inset-0" style={{ pointerEvents: 'none', zIndex: 5 }}>
+          {issuePins
+            .filter(
+              (p) =>
+                p.drawingId === selection?.drawingId &&
+                p.discipline === selection?.discipline,
+            )
+            .map((pin) => {
+              const sx = pin.x * transform.scale + transform.x;
+              const sy = pin.y * transform.scale + transform.y;
+              return (
+                <div
+                  key={pin.id}
+                  style={{ position: 'absolute', left: sx, top: sy, pointerEvents: 'auto' }}
+                >
+                  <IssuePinMarker pin={pin} />
+                </div>
+              );
+            })}
+        </div>
+      )}
+
       {/* 로딩 인디케이터 */}
       {!imageLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 pointer-events-none">
@@ -295,7 +344,17 @@ export default function DrawingViewer() {
       )}
 
       {/* ── 줌 컨트롤 (우측 하단) ─────────────────────────────── */}
-      <div className="absolute bottom-4 right-4 flex flex-col gap-1">
+      <div className="absolute bottom-4 right-4 flex flex-col gap-1" style={{ zIndex: 10 }}>
+        <button
+          onClick={() => setIsAddingIssue((v) => !v)}
+          className={`btn-icon shadow-card border border-border ${
+            isAddingIssue ? 'bg-brand text-white border-brand' : 'bg-white'
+          }`}
+          title={isAddingIssue ? '이슈 배치 취소 (ESC)' : '이슈 배치'}
+        >
+          <MapPin size={16} />
+        </button>
+        <div className="h-px bg-border mx-1" />
         <button
           onClick={() => zoom(ZOOM_FACTOR)}
           className="btn-icon bg-white shadow-card border border-border"
@@ -316,17 +375,6 @@ export default function DrawingViewer() {
         </button>
       </div>
 
-      {/* ── 하단 툴바 ──────────────────────────────────────────── */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-gray-800/90 rounded-full px-4 py-2 shadow-lg">
-        <button
-          className="text-white/80 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-colors"
-          title="패닝"
-        >
-          <Hand size={16} />
-        </button>
-        <div className="w-px h-4 bg-white/20 mx-1" />
-        <span className="text-white/60 text-xs">{Math.round(transform.scale * 100)}%</span>
-      </div>
     </div>
   );
 }
@@ -365,6 +413,46 @@ function getCurrentImage(
     (l) => l.revision.version === selection.revisionVersion,
   );
   return selected?.revision.image ?? selectedGroup.layers[0]?.revision.image ?? baseDrawingImage;
+}
+
+// ── 이슈 핀 마커 ────────────────────────────────────────────────
+
+function IssuePinMarker({ pin }: { pin: IssuePin }) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <div
+      style={{ transform: 'translate(-50%, -100%)' }}
+      className="relative"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* 아바타 원형 아이콘 */}
+      <div
+        className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg cursor-pointer border-2 border-white transition-transform hover:scale-110 ${
+          pin.status === 'open' ? 'bg-red-500' : 'bg-green-500'
+        }`}
+      >
+        <User size={15} className="text-white" />
+      </div>
+
+      {/* 호버 툴팁 */}
+      {hovered && (
+        <div
+          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-xl px-3 py-2.5 w-52 shadow-xl"
+          style={{ background: 'rgba(17,24,39,0.88)', backdropFilter: 'blur(6px)' }}
+        >
+          <p className="text-[11px] font-semibold text-white/50 mb-0.5">
+            [Issue#{pin.issueNumber}]
+          </p>
+          <p className="text-xs text-white leading-snug">{pin.title}</p>
+          <button className="mt-2 w-full bg-brand text-white text-xs rounded-lg px-2 py-1.5 font-medium hover:opacity-90 transition-opacity">
+            이슈 보기
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getHueRotate(color: string): number {

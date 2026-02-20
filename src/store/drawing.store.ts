@@ -2,6 +2,17 @@ import { create } from 'zustand';
 import type { DrawingTreeByDiscipline, DrawingSelection, Revision, ImageTransform } from '@/types';
 import { getDrawingTree, getDrawingById } from '@/api/drawings';
 
+export interface IssuePin {
+  id: string;
+  drawingId: string;
+  discipline: string;
+  x: number; // image pixel coordinate
+  y: number;
+  issueNumber: number;
+  title: string;
+  status: 'open' | 'resolved';
+}
+
 export interface LayerItem {
   revision: Revision;
   opacity: number;
@@ -55,12 +66,19 @@ interface DrawingState {
   // 공종별 레이어 그룹 (선택 공종이 첫 번째)
   disciplineGroups: DisciplineGroup[];
 
+  // 이슈 핀
+  issueVisible: boolean;
+  issuePins: IssuePin[];
+
   // 액션
   loadTree: () => Promise<void>;
   selectDrawing: (drawingId: string, discipline: string, revisionVersion: string) => void;
   toggleDiscipline: (discipline: string) => void;
   toggleBookmark: (drawingId: string, discipline: string) => void;
   setCompareMode: (on: boolean) => void;
+  setRevisionVersion: (version: string) => void;
+  setIssueVisible: (visible: boolean) => void;
+  addIssuePin: (drawingId: string, discipline: string, x: number, y: number) => void;
   expandDiscipline: (discipline: string) => void;
   toggleDisciplineGroup: (discipline: string) => void;
   setGroupLayerOpacity: (discipline: string, version: string, opacity: number) => void;
@@ -75,6 +93,8 @@ export const useDrawingStore = create<DrawingState>((set) => ({
   bookmarkedDrawings: new Set<string>(),
   compareMode: false,
   disciplineGroups: [],
+  issueVisible: true,
+  issuePins: [],
 
   loadTree: async () => {
     set({ treeLoading: true });
@@ -183,6 +203,33 @@ export const useDrawingStore = create<DrawingState>((set) => ({
   },
 
   setCompareMode: (on) => set({ compareMode: on }),
+
+  setIssueVisible: (visible) => set({ issueVisible: visible }),
+
+  addIssuePin: (drawingId, discipline, x, y) => {
+    set((s) => {
+      const count = s.issuePins.filter(
+        (p) => p.drawingId === drawingId && p.discipline === discipline,
+      ).length;
+      const pin: IssuePin = {
+        id: `${drawingId}-${discipline}-${Date.now()}`,
+        drawingId,
+        discipline,
+        x,
+        y,
+        issueNumber: count + 1,
+        title: `새 이슈 #${count + 1}`,
+        status: 'open',
+      };
+      return { issuePins: [...s.issuePins, pin] };
+    });
+  },
+
+  setRevisionVersion: (version) => {
+    set((s) => ({
+      selection: s.selection ? { ...s.selection, revisionVersion: version } : null,
+    }));
+  },
 
   expandDiscipline: (discipline) => {
     set((s) => ({
