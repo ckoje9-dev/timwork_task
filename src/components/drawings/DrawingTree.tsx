@@ -1,9 +1,17 @@
-import { ChevronDown, ChevronRight, FileText, Clock } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileText, Bookmark } from 'lucide-react';
 import { useDrawingStore } from '@/store/drawing.store';
 
-export default function DrawingTree() {
-  const { tree, treeLoading, selection, expandedDisciplines, toggleDiscipline, selectDrawing } =
-    useDrawingStore();
+interface Props {
+  searchKeyword: string;
+  filterDiscipline: string;
+}
+
+export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) {
+  const {
+    tree, treeLoading, selection,
+    expandedDisciplines, toggleDiscipline, selectDrawing,
+    bookmarkedDrawings, toggleBookmark,
+  } = useDrawingStore();
 
   if (treeLoading) {
     return (
@@ -13,10 +21,37 @@ export default function DrawingTree() {
     );
   }
 
+  const kw = searchKeyword.trim().toLowerCase();
+  const isSearching = kw.length > 0;
+
+  // 공종 필터 → 키워드 필터 순으로 적용
+  const filteredEntries = Object.entries(tree)
+    .filter(([discipline]) => filterDiscipline === '전체' || discipline === filterDiscipline)
+    .map(([discipline, nodes]) => {
+      const filteredNodes = isSearching
+        ? nodes.filter(
+            (n) =>
+              n.drawingId.toLowerCase().includes(kw) ||
+              n.drawingName.toLowerCase().includes(kw),
+          )
+        : nodes;
+      return [discipline, filteredNodes] as const;
+    })
+    .filter(([, nodes]) => nodes.length > 0);
+
+  if (filteredEntries.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-32 text-xs text-text-muted">
+        검색 결과가 없습니다
+      </div>
+    );
+  }
+
   return (
     <div className="py-2 overflow-y-auto h-full">
-      {Object.entries(tree).map(([discipline, nodes]) => {
-        const isExpanded = expandedDisciplines.has(discipline);
+      {filteredEntries.map(([discipline, nodes]) => {
+        // 키워드 검색 중에는 전부 펼침
+        const isExpanded = isSearching || expandedDisciplines.has(discipline);
 
         return (
           <div key={discipline}>
@@ -46,52 +81,63 @@ export default function DrawingTree() {
                     selection?.drawingId === node.drawingId &&
                     selection?.discipline === node.discipline;
 
+                  const bookmarkKey = `${node.drawingId}-${node.discipline}`;
+                  const isBookmarked = bookmarkedDrawings.has(bookmarkKey);
+
                   return (
-                    <li key={`${node.drawingId}-${node.discipline}`}>
-                      <button
-                        onClick={() => {
-                          const latestVersion =
-                            node.latestRevision?.version ?? '';
-                          selectDrawing(
-                            node.drawingId,
-                            node.discipline,
-                            latestVersion,
-                          );
-                        }}
+                    <li key={bookmarkKey}>
+                      {/* 버튼 분리: 선택 영역 + 우측 북마크/배지 */}
+                      <div
                         className={[
-                          'w-full flex items-start gap-2 pl-6 pr-3 py-2 text-left',
-                          'transition-colors hover:bg-surface-hover text-sm',
+                          'group flex items-center transition-colors text-sm',
                           isSelected
                             ? 'bg-brand-light text-brand font-medium'
-                            : 'text-text-secondary',
+                            : 'text-text-secondary hover:bg-surface-hover',
                         ].join(' ')}
                       >
-                        <FileText
-                          size={14}
-                          className={`mt-0.5 flex-shrink-0 ${isSelected ? 'text-brand' : 'text-text-muted'}`}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate leading-tight">
+                        {/* 선택 버튼 (flex-1) */}
+                        <button
+                          onClick={() => {
+                            const latestVersion = node.latestRevision?.version ?? '';
+                            selectDrawing(node.drawingId, node.discipline, latestVersion);
+                          }}
+                          className="flex-1 flex items-center gap-2 pl-6 py-2 text-left min-w-0"
+                        >
+                          <FileText
+                            size={14}
+                            className={`flex-shrink-0 ${isSelected ? 'text-brand' : 'text-text-muted'}`}
+                          />
+                          <span className="flex-1 min-w-0 truncate leading-tight">
                             {node.drawingId !== '00'
                               ? `${node.drawingId}_${node.drawingName}`
                               : node.drawingName}
-                          </p>
-                          {node.latestRevision && (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Clock size={10} className="text-text-muted" />
-                              <span className="text-xs text-text-muted">
-                                {node.latestRevision.version} ·{' '}
-                                {node.latestRevision.date}
-                              </span>
-                            </div>
+                          </span>
+                        </button>
+
+                        {/* 우측: 북마크 + 리비전 카운트 */}
+                        <div className="flex items-center gap-1 pr-2 flex-shrink-0">
+                          <button
+                            onClick={() => toggleBookmark(node.drawingId, node.discipline)}
+                            title={isBookmarked ? '북마크 해제' : '북마크'}
+                            className={[
+                              'p-1 rounded transition-all',
+                              isBookmarked
+                                ? 'text-brand opacity-100'
+                                : 'text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand',
+                            ].join(' ')}
+                          >
+                            <Bookmark
+                              size={12}
+                              className={isBookmarked ? 'fill-brand' : ''}
+                            />
+                          </button>
+                          {node.revisionCount > 1 && (
+                            <span className="text-xs bg-surface rounded px-1.5 py-0.5 text-text-muted">
+                              {node.revisionCount}
+                            </span>
                           )}
                         </div>
-                        {node.revisionCount > 1 && (
-                          <span className="flex-shrink-0 text-xs bg-surface rounded px-1.5 py-0.5 text-text-muted">
-                            {node.revisionCount}
-                          </span>
-                        )}
-                      </button>
+                      </div>
                     </li>
                   );
                 })}

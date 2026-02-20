@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Trash2,
   Layers,
+  Clock,
 } from 'lucide-react';
 import { useDrawingStore } from '@/store/drawing.store';
 import type { DrawingSelection } from '@/types';
@@ -15,10 +16,10 @@ import DrawingViewer from '@/components/drawings/DrawingViewer';
 import CompareModal from '@/components/drawings/CompareModal';
 
 export default function DrawingsPage() {
-  const { loadTree, selection, compareMode, tree, setCompareMode } = useDrawingStore();
+  const { loadTree, selection, compareMode, compareLayers, tree, setCompareMode } = useDrawingStore();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterDiscipline, setFilterDiscipline] = useState('전체');
-  const [issueVisible, setIssueVisible] = useState(false);
+  const [issueVisible, setIssueVisible] = useState(true);
 
   useEffect(() => {
     loadTree();
@@ -78,7 +79,7 @@ export default function DrawingsPage() {
 
         {/* 트리 */}
         <div className="flex-1 overflow-hidden">
-          <DrawingTree />
+          <DrawingTree searchKeyword={searchKeyword} filterDiscipline={filterDiscipline} />
         </div>
       </aside>
 
@@ -89,18 +90,46 @@ export default function DrawingsPage() {
           {/* 브레드크럼 */}
           <Breadcrumb selection={selection} />
 
-          {/* 우측 액션 */}
-          <div className="flex items-center gap-2">
+          {/* 우측: rev 정보 + 액션 버튼 */}
+          <div className="flex items-center gap-3">
+            {/* 선택된 도면의 rev + 날짜 */}
+            {selection && (() => {
+              const layer =
+                compareLayers.find((l) => l.revision.version === selection.revisionVersion) ??
+                compareLayers[compareLayers.length - 1];
+              if (!layer) return null;
+              return (
+                <div className="flex items-center gap-1 text-xs text-text-muted border-r border-border pr-3">
+                  <Clock size={11} />
+                  <span>{layer.revision.version}</span>
+                  <span>·</span>
+                  <span>{layer.revision.date}</span>
+                </div>
+              );
+            })()}
             {compareMode && (
               <span className="pill bg-brand text-white">비교 모드</span>
             )}
-            {/* 이슈 토글 버튼 */}
-            <button
-              onClick={() => setIssueVisible((v) => !v)}
-              className={`btn text-xs ${issueVisible ? 'btn-primary' : 'btn-secondary'}`}
-            >
-              이슈
-            </button>
+            {/* 이슈 토글 스위치 */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-text-secondary">이슈</span>
+              <button
+                role="switch"
+                aria-checked={issueVisible}
+                onClick={() => setIssueVisible((v) => !v)}
+                className={[
+                  'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200',
+                  issueVisible ? 'bg-brand' : 'bg-gray-200',
+                ].join(' ')}
+              >
+                <span
+                  className={[
+                    'inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 mt-0.5',
+                    issueVisible ? 'translate-x-4' : 'translate-x-0.5',
+                  ].join(' ')}
+                />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -162,8 +191,7 @@ function Breadcrumb({ selection }: { selection: DrawingSelection | null }) {
     { label: '전체 도면' },
     { label: selection.drawingId },
     { label: selection.discipline, highlight: true },
-    selection.revisionVersion ? { label: selection.revisionVersion } : null,
-  ].filter(Boolean) as { label: string; highlight?: boolean }[];
+  ] as { label: string; highlight?: boolean }[];
 
   return (
     <nav className="flex items-center gap-1 text-sm">

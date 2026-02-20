@@ -23,6 +23,9 @@ interface DrawingState {
   // 열린 공종 섹션 (accordion)
   expandedDisciplines: Set<string>;
 
+  // 북마크 (key: `${drawingId}-${discipline}`)
+  bookmarkedDrawings: Set<string>;
+
   // 비교 모드
   compareMode: boolean;
   compareLayers: CompareLayer[];
@@ -31,6 +34,7 @@ interface DrawingState {
   loadTree: () => Promise<void>;
   selectDrawing: (drawingId: string, discipline: string, revisionVersion: string) => void;
   toggleDiscipline: (discipline: string) => void;
+  toggleBookmark: (drawingId: string, discipline: string) => void;
   setCompareMode: (on: boolean) => void;
   toggleCompareLayer: (version: string) => void;
   setLayerOpacity: (version: string, opacity: number) => void;
@@ -42,6 +46,7 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
   treeLoading: false,
   selection: null,
   expandedDisciplines: new Set<string>(),
+  bookmarkedDrawings: new Set<string>(),
   compareMode: false,
   compareLayers: [],
 
@@ -93,6 +98,16 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
         next.add(discipline);
       }
       return { expandedDisciplines: next };
+    });
+  },
+
+  toggleBookmark: (drawingId, discipline) => {
+    set((s) => {
+      const key = `${drawingId}-${discipline}`;
+      const next = new Set(s.bookmarkedDrawings);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return { bookmarkedDrawings: next };
     });
   },
 
