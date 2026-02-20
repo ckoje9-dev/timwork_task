@@ -19,15 +19,17 @@ export default function DrawingViewer() {
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 });
   const [isDragging, setIsDragging] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageDimensions, setImageDimensions] = useState<{ w: number; h: number } | null>(null);
 
   // ref로 드래그 시작 상태 관리 (재렌더링 없이 최신값 유지)
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; tx: number; ty: number } | null>(null);
 
   const { selection, compareMode, compareLayers } = useDrawingStore();
 
-  // 선택이 바뀌면 뷰 초기화
+  // 선택이 바뀌면 뷰 초기화 (이미지 로드 후 fit 적용)
   useEffect(() => {
     setImageLoaded(false);
+    setImageDimensions(null);
     setTransform({ x: 0, y: 0, scale: 1 });
   }, [selection?.drawingId, selection?.discipline, selection?.revisionVersion]);
 
@@ -101,8 +103,10 @@ export default function DrawingViewer() {
   }, [containerEl]);
 
   const fitToScreen = useCallback(() => {
-    setTransform({ x: 0, y: 0, scale: 1 });
-  }, []);
+    if (containerEl && imageDimensions) {
+      setTransform(calcFitTransform(containerEl, imageDimensions.w, imageDimensions.h));
+    }
+  }, [containerEl, imageDimensions]);
 
   const zoom = useCallback((factor: number) => {
     setTransform((prev) => ({
@@ -152,7 +156,16 @@ export default function DrawingViewer() {
               src={getImageUrl(currentImage)}
               alt="도면"
               draggable={false}
-              onLoad={() => setImageLoaded(true)}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                const natW = img.naturalWidth;
+                const natH = img.naturalHeight;
+                setImageDimensions({ w: natW, h: natH });
+                setImageLoaded(true);
+                if (containerEl) {
+                  setTransform(calcFitTransform(containerEl, natW, natH));
+                }
+              }}
               className="block max-w-none"
               style={{ maxWidth: 'none', userSelect: 'none', pointerEvents: 'none' }}
             />
@@ -231,6 +244,17 @@ export default function DrawingViewer() {
 }
 
 // ── 헬퍼 ────────────────────────────────────────────────────────
+
+/** 컨테이너 안에 이미지가 꽉 차도록 scale·위치를 계산 */
+function calcFitTransform(container: HTMLDivElement, natW: number, natH: number): Transform {
+  const PAD = 24;
+  const cW = container.clientWidth;
+  const cH = container.clientHeight;
+  const scale = Math.min((cW - PAD * 2) / natW, (cH - PAD * 2) / natH);
+  const x = (cW - natW * scale) / 2;
+  const y = (cH - natH * scale) / 2;
+  return { x, y, scale };
+}
 
 function getCurrentImage(
   selection: DrawingSelection | null,
