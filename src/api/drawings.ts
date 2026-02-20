@@ -130,3 +130,8 @@ export async function getDrawingTree(): Promise<DrawingTreeByDiscipline> {
 }
 
 export { _getAllRevisions as getAllRevisions };
+
+/** parent가 parentId인 모든 Drawing 동기 반환 (metadata가 이미 로드되어 있음) */
+export function getChildDrawings(parentId: string): Drawing[] {
+  return Object.values(metadata.drawings).filter((d) => d.parent === parentId);
+}

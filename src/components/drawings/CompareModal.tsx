@@ -1,36 +1,123 @@
 import { X, Eye, EyeOff } from 'lucide-react';
-import { useDrawingStore } from '@/store/drawing.store';
+import { useDrawingStore, type DisciplineGroup, type LayerItem } from '@/store/drawing.store';
 import DrawingViewer from './DrawingViewer';
 
 /**
  * 도면 비교 모달
- * - 이슈 상세 모달과 동일한 스타일(파란 헤더, 흰 패널, 어두운 오버레이)
- * - 좌측 사이드바(240px)와 상단 헤더(64px)는 가리지 않음
+ * - 공종 단위 카드 UI: 각 카드에 공종 헤더(eye 토글) + 리비전 목록(최신순)
+ * - 리비전 행: 색상 도트 + "REV# · 날짜" 한 줄 + opacity 슬라이더
  */
+
+// ── 리비전 행 ─────────────────────────────────────────────────
+function LayerRow({
+  layer,
+  discipline,
+  disabled,
+  onOpacity,
+}: {
+  layer: LayerItem;
+  discipline: string;
+  disabled: boolean;
+  onOpacity: (v: number) => void;
+}) {
+  const label = layer.revision.date
+    ? `${layer.revision.version} · ${layer.revision.date}`
+    : layer.revision.version;
+
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-1.5 transition-opacity ${
+        disabled ? 'opacity-30 pointer-events-none' : ''
+      }`}
+    >
+      <div
+        className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
+        style={{ backgroundColor: layer.color }}
+      />
+      <span className="flex-1 text-xs text-text-secondary truncate" title={label}>
+        {label}
+      </span>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.05}
+        value={layer.opacity}
+        onChange={(e) => onOpacity(Number(e.target.value))}
+        className="w-14 h-1 accent-brand flex-shrink-0"
+        title={`${discipline} ${layer.revision.version} 투명도 ${Math.round(layer.opacity * 100)}%`}
+      />
+    </div>
+  );
+}
+
+// ── 공종 카드 ─────────────────────────────────────────────────
+function DisciplineCard({
+  group,
+  onToggle,
+  onOpacity,
+}: {
+  group: DisciplineGroup;
+  onToggle: () => void;
+  onOpacity: (version: string, v: number) => void;
+}) {
+  return (
+    <div className="border-b border-border last:border-b-0">
+      {/* 카드 헤더: [공종] 도면명 + eye 토글 */}
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="flex-1 text-xs font-semibold text-text-primary truncate">
+          [{group.discipline}] {group.drawingName}
+        </span>
+        <button
+          onClick={onToggle}
+          className={`btn-icon w-6 h-6 flex-shrink-0 ${
+            group.visible ? 'text-brand' : 'text-text-muted'
+          }`}
+          title={group.visible ? '숨기기' : '보이기'}
+        >
+          {group.visible ? <Eye size={13} /> : <EyeOff size={13} />}
+        </button>
+      </div>
+
+      {/* 리비전 목록 */}
+      <div className="pb-1.5">
+        {group.layers.map((layer) => (
+          <LayerRow
+            key={layer.revision.version}
+            layer={layer}
+            discipline={group.discipline}
+            disabled={!group.visible}
+            onOpacity={(v) => onOpacity(layer.revision.version, v)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 메인 모달 ─────────────────────────────────────────────────
 export default function CompareModal() {
   const {
     compareMode,
-    compareLayers,
-    toggleCompareLayer,
-    setLayerOpacity,
     setCompareMode,
     selection,
+    disciplineGroups,
+    toggleDisciplineGroup,
+    setGroupLayerOpacity,
   } = useDrawingStore();
 
   if (!compareMode || !selection) return null;
 
   return (
-    /* 오버레이: 사이드바(left-sidebar) · 헤더(top-header) 이후 영역만 덮음 */
     <div
       className="fixed top-header left-sidebar right-0 bottom-0 bg-black/40 z-50 flex items-center justify-center p-5"
       onClick={() => setCompareMode(false)}
     >
-      {/* ── 모달 패널 ──────────────────────────────────────────── */}
       <div
         className="bg-white rounded-xl shadow-modal w-full h-full flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 파란 헤더 (이슈 모달과 동일한 modal-header 스타일) */}
+        {/* 파란 헤더 */}
         <div className="modal-header">
           <div className="flex items-center gap-3">
             <h2 className="font-semibold text-sm">도면 비교</h2>
@@ -47,69 +134,28 @@ export default function CompareModal() {
           </button>
         </div>
 
-        {/* ── 본문: 도면 뷰어 + 레이어 패널 ─────────────────────── */}
+        {/* 본문: 뷰어 + 레이어 패널 */}
         <div className="flex-1 relative overflow-hidden">
-          {/* 도면 뷰어 (줌/패닝) */}
           <DrawingViewer />
 
           {/* 왼쪽 플로팅 레이어 패널 */}
-          <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-dropdown border border-border w-56 overflow-hidden">
-            <div className="px-3 py-2 border-b border-border">
-              <p className="text-xs font-semibold text-text-primary">리비전 레이어</p>
-            </div>
-
-            <div className="p-2 space-y-0.5 max-h-72 overflow-y-auto">
-              {compareLayers.map((layer) => (
-                <div
-                  key={layer.revision.version}
-                  className="flex items-center gap-2 px-1.5 py-2 rounded hover:bg-surface-hover"
-                >
-                  {/* 색상 도트 */}
-                  <div
-                    className="w-3 h-3 rounded-sm flex-shrink-0"
-                    style={{ backgroundColor: layer.color }}
-                  />
-
-                  {/* 버전 + 날짜 */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-text-primary leading-none">
-                      {layer.revision.version}
-                    </p>
-                    <p className="text-[11px] text-text-muted mt-0.5">{layer.revision.date}</p>
-                  </div>
-
-                  {/* 투명도 슬라이더 */}
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    value={layer.opacity}
-                    onChange={(e) =>
-                      setLayerOpacity(layer.revision.version, Number(e.target.value))
-                    }
-                    className="w-14 h-1 accent-brand flex-shrink-0"
-                    disabled={!layer.visible}
-                    title={`투명도 ${Math.round(layer.opacity * 100)}%`}
-                  />
-
-                  {/* 가시성 토글 */}
-                  <button
-                    onClick={() => toggleCompareLayer(layer.revision.version)}
-                    className={`btn-icon w-6 h-6 flex-shrink-0 ${
-                      layer.visible ? 'text-brand' : 'text-text-muted'
-                    }`}
-                    title={layer.visible ? '숨기기' : '보이기'}
-                  >
-                    {layer.visible ? <Eye size={13} /> : <EyeOff size={13} />}
-                  </button>
-                </div>
+          <div className="absolute top-4 left-4 z-10 bg-white rounded-lg shadow-dropdown border border-border w-64 max-h-[calc(100%-2rem)] flex flex-col overflow-hidden">
+            <div className="overflow-y-auto flex-1">
+              {disciplineGroups.map((group) => (
+                <DisciplineCard
+                  key={group.discipline}
+                  group={group}
+                  onToggle={() => toggleDisciplineGroup(group.discipline)}
+                  onOpacity={(version, v) =>
+                    setGroupLayerOpacity(group.discipline, version, v)
+                  }
+                />
               ))}
             </div>
 
-            <div className="px-3 py-2 border-t border-border bg-surface">
+            <div className="px-3 py-2 border-t border-border bg-surface flex-shrink-0">
               <p className="text-[11px] text-text-muted leading-relaxed">
-                레이어를 켜고 끄거나 투명도를 조절해 변경점을 비교하세요
+                공종 눈 아이콘으로 레이어를 켜고 끄거나 슬라이더로 투명도를 조절하세요
               </p>
             </div>
           </div>

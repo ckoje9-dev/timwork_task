@@ -114,8 +114,8 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
                           </span>
                         </button>
 
-                        {/* 우측: 북마크 + 리비전 카운트 */}
-                        <div className="flex items-center gap-1 pr-2 flex-shrink-0">
+                        {/* 우측: 북마크 */}
+                        <div className="pr-2 flex-shrink-0">
                           <button
                             onClick={() => toggleBookmark(node.drawingId, node.discipline)}
                             title={isBookmarked ? '북마크 해제' : '북마크'}
@@ -131,11 +131,6 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
                               className={isBookmarked ? 'fill-brand' : ''}
                             />
                           </button>
-                          {node.revisionCount > 1 && (
-                            <span className="text-xs bg-surface rounded px-1.5 py-0.5 text-text-muted">
-                              {node.revisionCount}
-                            </span>
-                          )}
                         </div>
                       </div>
                     </li>

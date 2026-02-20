@@ -1,7 +1,7 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Hand, ScanSearch } from 'lucide-react';
-import { getImageUrl } from '@/api/drawings';
-import { useDrawingStore, type CompareLayer } from '@/store/drawing.store';
+import { getImageUrl, getChildDrawings } from '@/api/drawings';
+import { useDrawingStore, type DisciplineGroup } from '@/store/drawing.store';
 import type { DrawingSelection } from '@/types';
 
 interface Transform {
@@ -24,7 +24,29 @@ export default function DrawingViewer() {
   // ref로 드래그 시작 상태 관리 (재렌더링 없이 최신값 유지)
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; tx: number; ty: number } | null>(null);
 
-  const { selection, compareMode, compareLayers } = useDrawingStore();
+  const { selection, compareMode, disciplineGroups, baseDrawingImage, tree, selectDrawing } = useDrawingStore();
+  const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
+
+  // 전체 배치도일 때 자식 도면 목록
+  const childDrawings = useMemo(
+    () => (selection?.drawingId === '00' ? getChildDrawings('00') : []),
+    [selection?.drawingId],
+  );
+
+  // 폴리곤 클릭 → 첫 번째 공종으로 navigate
+  const handlePolygonClick = useCallback(
+    (drawingId: string) => {
+      for (const [discipline, nodes] of Object.entries(tree)) {
+        if (discipline === '전체') continue;
+        const node = nodes.find((n) => n.drawingId === drawingId);
+        if (node) {
+          selectDrawing(drawingId, discipline, node.latestRevision?.version ?? '');
+          return;
+        }
+      }
+    },
+    [tree, selectDrawing],
+  );
 
   // 선택이 바뀌면 뷰 초기화 (이미지 로드 후 fit 적용)
   useEffect(() => {
@@ -34,8 +56,6 @@ export default function DrawingViewer() {
   }, [selection?.drawingId, selection?.discipline, selection?.revisionVersion]);
 
   // ── 드래그 중 window 레벨에서 이벤트 처리 ───────────────────
-  // 이유: React 합성 이벤트는 컨테이너 밖으로 나가면 누락됨.
-  // window에 등록하면 마우스가 컨테이너 밖으로 빠져도 추적 가능.
   useEffect(() => {
     if (!isDragging) return;
 
@@ -66,7 +86,6 @@ export default function DrawingViewer() {
   // ── 마우스 다운: 드래그 시작 ─────────────────────────────────
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    // 네이티브 드래그 방지 (blank 현상 원인)
     e.preventDefault();
     dragStartRef.current = {
       mouseX: e.clientX,
@@ -77,8 +96,7 @@ export default function DrawingViewer() {
     setIsDragging(true);
   }, [transform.x, transform.y]);
 
-  // ── 휠 줌 (네이티브 이벤트로 passive 문제 회피) ──────────────
-  // containerEl이 마운트된 뒤에만 실행되도록 콜백 ref(useState) 사용
+  // ── 휠 줌 ──────────────────────────────────────────────────
   useEffect(() => {
     if (!containerEl) return;
 
@@ -97,7 +115,6 @@ export default function DrawingViewer() {
       });
     };
 
-    // passive: false → preventDefault() 허용
     containerEl.addEventListener('wheel', onWheel, { passive: false });
     return () => containerEl.removeEventListener('wheel', onWheel);
   }, [containerEl]);
@@ -115,7 +132,7 @@ export default function DrawingViewer() {
     }));
   }, []);
 
-  const currentImage = getCurrentImage(selection, compareLayers, compareMode);
+  const currentImage = getCurrentImage(selection, disciplineGroups, compareMode, baseDrawingImage);
 
   if (!selection) {
     return (
@@ -135,7 +152,6 @@ export default function DrawingViewer() {
       <div
         className={`w-full h-full select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
         onMouseDown={handleMouseDown}
-        // 네이티브 HTML 드래그 차단 → 이게 없으면 클릭 드래그 시 페이지 blank 현상 발생
         onDragStart={(e) => e.preventDefault()}
       >
         {/* 변환 레이어 */}
@@ -143,7 +159,6 @@ export default function DrawingViewer() {
           style={{
             transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
             transformOrigin: '0 0',
-            // 드래그 중에는 transition 끄기 (지연 느낌 방지)
             transition: isDragging ? 'none' : 'transform 0.05s ease-out',
             willChange: 'transform',
           }}
@@ -171,30 +186,81 @@ export default function DrawingViewer() {
             />
           )}
 
-          {/* 비교 모드: 리비전 레이어 오버레이 */}
-          {compareMode && compareLayers.length > 1 && (
-            <div className="absolute inset-0">
-              {compareLayers.slice(1).map((layer) => {
-                if (!layer.visible) return null;
+          {/* 비교 모드: 오버레이 레이어 */}
+          {compareMode && disciplineGroups.flatMap((group) => {
+            if (!group.visible) return [];
+            const isSelectedGroup = group.discipline === selection.discipline;
+            // 선택된 공종의 첫 번째 레이어는 베이스 이미지로 사용됨
+            const overlayLayers = isSelectedGroup ? group.layers.slice(1) : group.layers;
+            return overlayLayers.map((layer) => (
+              <img
+                key={`${group.discipline}-${layer.revision.version}`}
+                src={getImageUrl(layer.revision.image)}
+                alt={`${group.discipline} ${layer.revision.version}`}
+                draggable={false}
+                className="absolute top-0 left-0 w-full h-full"
+                style={{
+                  opacity: layer.opacity,
+                  mixBlendMode: 'multiply',
+                  filter: `hue-rotate(${getHueRotate(layer.color)}deg) saturate(2)`,
+                  maxWidth: 'none',
+                  userSelect: 'none',
+                  pointerEvents: 'none',
+                }}
+              />
+            ));
+          })}
+
+          {/* 전체 배치도: 자식 도면 폴리곤 클릭 영역 */}
+          {selection?.drawingId === '00' && imageDimensions && childDrawings.length > 0 && (
+            <svg
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: imageDimensions.w,
+                height: imageDimensions.h,
+              }}
+              viewBox={`0 0 ${imageDimensions.w} ${imageDimensions.h}`}
+            >
+              {childDrawings.map((child) => {
+                if (!child.position) return null;
+                const pts = child.position.vertices.map(([x, y]) => `${x},${y}`).join(' ');
+                const cx = child.position.vertices.reduce((s, [x]) => s + x, 0) / child.position.vertices.length;
+                const cy = child.position.vertices.reduce((s, [, y]) => s + y, 0) / child.position.vertices.length;
+                const isHovered = hoveredPolygonId === child.id;
                 return (
-                  <img
-                    key={layer.revision.version}
-                    src={getImageUrl(layer.revision.image)}
-                    alt={layer.revision.version}
-                    draggable={false}
-                    className="absolute top-0 left-0 w-full h-full"
-                    style={{
-                      opacity: layer.opacity,
-                      mixBlendMode: 'multiply',
-                      filter: `hue-rotate(${getHueRotate(layer.color)}deg) saturate(2)`,
-                      maxWidth: 'none',
-                      userSelect: 'none',
-                      pointerEvents: 'none',
-                    }}
-                  />
+                  <g
+                    key={child.id}
+                    style={{ cursor: 'pointer' }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={() => handlePolygonClick(child.id)}
+                    onMouseEnter={() => setHoveredPolygonId(child.id)}
+                    onMouseLeave={() => setHoveredPolygonId(null)}
+                  >
+                    <polygon
+                      points={pts}
+                      fill={isHovered ? 'rgba(59,130,246,0.22)' : 'rgba(59,130,246,0.08)'}
+                      stroke={isHovered ? '#2563EB' : '#3B82F6'}
+                      strokeWidth={isHovered ? 5 : 3}
+                      style={{ transition: 'fill 0.15s, stroke-width 0.15s' }}
+                    />
+                    <text
+                      x={cx}
+                      y={cy}
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fontSize={26}
+                      fontWeight={600}
+                      fill={isHovered ? '#1D4ED8' : '#1E40AF'}
+                      style={{ pointerEvents: 'none', userSelect: 'none' }}
+                    >
+                      {child.name}
+                    </text>
+                  </g>
                 );
               })}
-            </div>
+            </svg>
           )}
         </div>
       </div>
@@ -258,33 +324,34 @@ function calcFitTransform(container: HTMLDivElement, natW: number, natH: number)
 
 function getCurrentImage(
   selection: DrawingSelection | null,
-  compareLayers: CompareLayer[],
+  disciplineGroups: DisciplineGroup[],
   compareMode: boolean,
+  baseDrawingImage: string | null,
 ): string | null {
   if (!selection) return null;
 
-  if (compareMode && compareLayers.length > 0) {
-    const baseLayer = compareLayers.find((l: CompareLayer) => l.visible);
-    return baseLayer?.revision.image ?? null;
+  const selectedGroup = disciplineGroups.find((g) => g.discipline === selection.discipline);
+  if (!selectedGroup || selectedGroup.layers.length === 0) return baseDrawingImage;
+
+  if (compareMode) {
+    // 비교 모드: 선택 공종의 첫 번째 레이어(최신 리비전)가 베이스
+    return selectedGroup.layers[0].revision.image;
   }
 
-  if (compareLayers.length > 0) {
-    const selected = compareLayers.find(
-      (l: CompareLayer) => l.revision.version === selection.revisionVersion,
-    );
-    if (selected) return selected.revision.image;
-    return compareLayers[compareLayers.length - 1]?.revision.image ?? null;
-  }
-
-  return null;
+  // 일반 모드: 선택된 리비전 이미지
+  const selected = selectedGroup.layers.find(
+    (l) => l.revision.version === selection.revisionVersion,
+  );
+  return selected?.revision.image ?? selectedGroup.layers[0]?.revision.image ?? baseDrawingImage;
 }
 
 function getHueRotate(color: string): number {
-  const map: Record<string, number> = {
-    '#374151': 0,
-    '#2563EB': 220,
-    '#F59E0B': 40,
-    '#10B981': 155,
-  };
-  return map[color] ?? 0;
+  if (['#374151', '#6B7280', '#9CA3AF', '#D1D5DB'].includes(color)) return 0;   // 건축 grey
+  if (['#B45309', '#D97706', '#FCD34D', '#FDE68A'].includes(color)) return 40;  // 구조 amber
+  if (['#DC2626', '#EF4444', '#F87171', '#FCA5A5'].includes(color)) return 350; // 소방 red
+  if (['#1E40AF', '#2563EB', '#60A5FA', '#93C5FD'].includes(color)) return 220; // 공조 blue
+  if (['#059669', '#10B981', '#34D399', '#6EE7B7'].includes(color)) return 155; // 배관 green
+  if (['#7C3AED', '#8B5CF6', '#A78BFA', '#C4B5FD'].includes(color)) return 270; // 설비 purple
+  if (['#16A34A', '#22C55E', '#4ADE80', '#86EFAC'].includes(color)) return 120; // 조경 green2
+  return 0;
 }
