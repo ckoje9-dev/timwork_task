@@ -1,12 +1,11 @@
 /**
  * Drawings API
  *
- * Mock: metadata.json을 직접 import하여 가공 후 반환
+ * Mock: /metadata.json(public)을 fetch하여 가공 후 반환
  * Real: apiFetch('/drawings') 등으로 교체
  */
 
 import { mockDelay, apiConfig, apiFetch } from './client';
-import metadataRaw from '../../instructions/data/metadata.json';
 import type {
   Metadata,
   Drawing,
@@ -16,37 +15,48 @@ import type {
   Revision,
 } from '@/types';
 
-// JSON을 타입으로 캐스팅 (JSON import는 unknown을 경유해야 안전)
-const metadata = metadataRaw as unknown as Metadata;
-
 // 이미지 경로를 public 폴더 기준으로 변환
 export function getImageUrl(filename: string): string {
   return `/drawings/${filename}`;
 }
 
+// ── metadata 캐시 ────────────────────────────────────────────
+
+let _metadataCache: Metadata | null = null;
+
+async function ensureMetadata(): Promise<Metadata> {
+  if (_metadataCache) return _metadataCache;
+  const res = await fetch('/metadata.json');
+  if (!res.ok) throw new Error(`Failed to load metadata: ${res.status}`);
+  _metadataCache = (await res.json()) as Metadata;
+  return _metadataCache;
+}
+
 // ── Mock 구현체 ──────────────────────────────────────────────
 
-function _getMetadata(): Metadata {
-  return metadata;
+async function _getMetadata(): Promise<Metadata> {
+  return ensureMetadata();
 }
 
-function _getDrawings(): Record<string, Drawing> {
-  return metadata.drawings;
+async function _getDrawings(): Promise<Record<string, Drawing>> {
+  const m = await ensureMetadata();
+  return m.drawings;
 }
 
-function _getDrawingById(id: string): Drawing | null {
-  return metadata.drawings[id] ?? null;
+async function _getDrawingById(id: string): Promise<Drawing | null> {
+  const m = await ensureMetadata();
+  return m.drawings[id] ?? null;
 }
 
 /**
  * 공종(discipline)별로 도면을 그룹화한 트리 반환
- * 스크린샷의 왼쪽 패널 트리 구조에 대응
  */
-function _getDrawingTree(): DrawingTreeByDiscipline {
+async function _getDrawingTree(): Promise<DrawingTreeByDiscipline> {
+  const m = await ensureMetadata();
   const tree: DrawingTreeByDiscipline = {};
 
   // 전체 배치도(00)는 모든 공종의 최상단에 추가
-  const rootDrawing = metadata.drawings['00'];
+  const rootDrawing = m.drawings['00'];
   if (rootDrawing) {
     const rootNode: DrawingTreeNode = {
       drawingId: '00',
@@ -59,7 +69,7 @@ function _getDrawingTree(): DrawingTreeByDiscipline {
   }
 
   // 나머지 도면들을 공종별로 그룹화
-  Object.values(metadata.drawings).forEach((drawing) => {
+  Object.values(m.drawings).forEach((drawing) => {
     if (!drawing.disciplines) return;
 
     Object.entries(drawing.disciplines).forEach(([discipline, discData]) => {
@@ -79,7 +89,7 @@ function _getDrawingTree(): DrawingTreeByDiscipline {
   });
 
   // 공종 순서 정렬 (metadata.disciplines 순서 준수)
-  const disciplineOrder = ['전체', ...metadata.disciplines.map((d) => d.name)];
+  const disciplineOrder = ['전체', ...m.disciplines.map((d) => d.name)];
   const sorted: DrawingTreeByDiscipline = {};
   disciplineOrder.forEach((d) => {
     if (tree[d]) sorted[d] = tree[d];
@@ -110,28 +120,29 @@ function _getAllRevisions(disciplineData: DrawingDiscipline): Revision[] {
 // ── Public API 함수 (Mock ↔ Real 스위칭) ─────────────────────
 
 export async function getMetadata(): Promise<Metadata> {
-  if (apiConfig.useMock) return mockDelay(_getMetadata());
+  if (apiConfig.useMock) return mockDelay(await _getMetadata());
   return apiFetch<Metadata>('/drawings/metadata');
 }
 
 export async function getDrawings(): Promise<Record<string, Drawing>> {
-  if (apiConfig.useMock) return mockDelay(_getDrawings());
+  if (apiConfig.useMock) return mockDelay(await _getDrawings());
   return apiFetch<Record<string, Drawing>>('/drawings');
 }
 
 export async function getDrawingById(id: string): Promise<Drawing | null> {
-  if (apiConfig.useMock) return mockDelay(_getDrawingById(id));
+  if (apiConfig.useMock) return mockDelay(await _getDrawingById(id));
   return apiFetch<Drawing | null>(`/drawings/${id}`);
 }
 
 export async function getDrawingTree(): Promise<DrawingTreeByDiscipline> {
-  if (apiConfig.useMock) return mockDelay(_getDrawingTree());
+  if (apiConfig.useMock) return mockDelay(await _getDrawingTree());
   return apiFetch<DrawingTreeByDiscipline>('/drawings/tree');
 }
 
 export { _getAllRevisions as getAllRevisions };
 
-/** parent가 parentId인 모든 Drawing 동기 반환 (metadata가 이미 로드되어 있음) */
-export function getChildDrawings(parentId: string): Drawing[] {
-  return Object.values(metadata.drawings).filter((d) => d.parent === parentId);
+/** parent가 parentId인 모든 Drawing 반환 */
+export async function getChildDrawings(parentId: string): Promise<Drawing[]> {
+  const m = await ensureMetadata();
+  return Object.values(m.drawings).filter((d) => d.parent === parentId);
 }

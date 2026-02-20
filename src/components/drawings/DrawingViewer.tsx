@@ -1,8 +1,8 @@
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Hand, ScanSearch } from 'lucide-react';
 import { getImageUrl, getChildDrawings } from '@/api/drawings';
 import { useDrawingStore, type DisciplineGroup } from '@/store/drawing.store';
-import type { DrawingSelection } from '@/types';
+import type { DrawingSelection, Drawing } from '@/types';
 
 interface Transform {
   x: number;
@@ -26,12 +26,16 @@ export default function DrawingViewer() {
 
   const { selection, compareMode, disciplineGroups, baseDrawingImage, tree, selectDrawing } = useDrawingStore();
   const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
+  const [childDrawings, setChildDrawings] = useState<Drawing[]>([]);
 
-  // 전체 배치도일 때 자식 도면 목록
-  const childDrawings = useMemo(
-    () => (selection?.drawingId === '00' ? getChildDrawings('00') : []),
-    [selection?.drawingId],
-  );
+  // 전체 배치도일 때 자식 도면 목록 로드
+  useEffect(() => {
+    if (selection?.drawingId !== '00') {
+      setChildDrawings([]);
+      return;
+    }
+    getChildDrawings('00').then(setChildDrawings);
+  }, [selection?.drawingId]);
 
   // 폴리곤 클릭 → 첫 번째 공종으로 navigate
   const handlePolygonClick = useCallback(
