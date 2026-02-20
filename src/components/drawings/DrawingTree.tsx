@@ -1,3 +1,4 @@
+import { useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight, FileText, Bookmark } from 'lucide-react';
 import { useDrawingStore } from '@/store/drawing.store';
 
@@ -12,6 +13,15 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
     expandedDisciplines, toggleDiscipline, selectDrawing,
     bookmarkedDrawings, toggleBookmark,
   } = useDrawingStore();
+
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // 선택된 도면이 바뀌면 해당 항목으로 스크롤
+  useEffect(() => {
+    if (!selection || !listRef.current) return;
+    const el = listRef.current.querySelector<HTMLElement>('[data-selected="true"]');
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selection?.drawingId, selection?.discipline]);
 
   if (treeLoading) {
     return (
@@ -35,7 +45,11 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
               n.drawingName.toLowerCase().includes(kw),
           )
         : nodes;
-      return [discipline, filteredNodes] as const;
+      // 도면 ID 기준 오름차순 정렬
+      const sortedNodes = [...filteredNodes].sort((a, b) =>
+        a.drawingId.localeCompare(b.drawingId, undefined, { numeric: true }),
+      );
+      return [discipline, sortedNodes] as const;
     })
     .filter(([, nodes]) => nodes.length > 0);
 
@@ -48,7 +62,7 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
   }
 
   return (
-    <div className="py-2 overflow-y-auto h-full">
+    <div ref={listRef} className="py-2 overflow-y-auto h-full">
       {filteredEntries.map(([discipline, nodes]) => {
         // 키워드 검색 중에는 전부 펼침
         const isExpanded = isSearching || expandedDisciplines.has(discipline);
@@ -85,7 +99,7 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
                   const isBookmarked = bookmarkedDrawings.has(bookmarkKey);
 
                   return (
-                    <li key={bookmarkKey}>
+                    <li key={bookmarkKey} data-selected={isSelected ? 'true' : undefined}>
                       {/* 버튼 분리: 선택 영역 + 우측 북마크/배지 */}
                       <div
                         className={[

@@ -10,13 +10,13 @@ import {
   Clock,
 } from 'lucide-react';
 import { useDrawingStore } from '@/store/drawing.store';
-import type { DrawingSelection } from '@/types';
+import type { DrawingSelection, DrawingTreeByDiscipline } from '@/types';
 import DrawingTree from '@/components/drawings/DrawingTree';
 import DrawingViewer from '@/components/drawings/DrawingViewer';
 import CompareModal from '@/components/drawings/CompareModal';
 
 export default function DrawingsPage() {
-  const { loadTree, selection, compareMode, disciplineGroups, tree, setCompareMode } = useDrawingStore();
+  const { loadTree, selection, compareMode, disciplineGroups, tree, setCompareMode, expandDiscipline } = useDrawingStore();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterDiscipline, setFilterDiscipline] = useState('전체');
   const [issueVisible, setIssueVisible] = useState(true);
@@ -24,6 +24,12 @@ export default function DrawingsPage() {
   useEffect(() => {
     loadTree();
   }, [loadTree]);
+
+  useEffect(() => {
+    if (filterDiscipline !== '전체') {
+      expandDiscipline(filterDiscipline);
+    }
+  }, [filterDiscipline, expandDiscipline]);
 
   const disciplines = ['전체', ...Object.keys(tree).filter((d) => d !== '전체')];
 
@@ -88,7 +94,7 @@ export default function DrawingsPage() {
         {/* 상단 컨텍스트 바 */}
         <div className="flex items-center justify-between px-4 py-2 bg-white border-b border-border flex-shrink-0">
           {/* 브레드크럼 */}
-          <Breadcrumb selection={selection} />
+          <Breadcrumb selection={selection} tree={tree} />
 
           {/* 우측: rev 정보 + 액션 버튼 */}
           <div className="flex items-center gap-3">
@@ -179,7 +185,13 @@ function ToolbarButton({
 
 // ── 브레드크럼 ────────────────────────────────────────────────
 
-function Breadcrumb({ selection }: { selection: DrawingSelection | null }) {
+function Breadcrumb({
+  selection,
+  tree,
+}: {
+  selection: DrawingSelection | null;
+  tree: DrawingTreeByDiscipline;
+}) {
   if (!selection) {
     return (
       <div className="flex items-center gap-1 text-sm text-text-muted">
@@ -188,18 +200,32 @@ function Breadcrumb({ selection }: { selection: DrawingSelection | null }) {
     );
   }
 
-  const parts = [
-    { label: '전체 도면' },
-    { label: selection.drawingId },
-    { label: selection.discipline, highlight: true },
-  ] as { label: string; highlight?: boolean }[];
+  // tree에서 실제 도면명 조회
+  const node = tree[selection.discipline]?.find((n) => n.drawingId === selection.drawingId);
+  const drawingName = node?.drawingName ?? selection.drawingId;
+
+  // 트리와 동일한 포맷: 전체 배치도(00)는 ID 없이 도면명만, 나머지는 ID_도면명
+  const drawingLabel =
+    selection.drawingId === '00' ? drawingName : `${selection.drawingId}_${drawingName}`;
+
+  // {공종} > {도면명} 형식
+  const parts: { label: string; highlight?: boolean }[] = [
+    { label: selection.discipline },
+    { label: drawingLabel, highlight: true },
+  ];
 
   return (
-    <nav className="flex items-center gap-1 text-sm">
+    <nav className="flex items-center gap-1 text-sm min-w-0 overflow-hidden">
       {parts.map((part, idx) => (
-        <span key={idx} className="flex items-center gap-1">
-          {idx > 0 && <ChevronRight size={13} className="text-text-muted" />}
-          <span className={part.highlight ? 'text-brand font-semibold' : 'text-text-secondary'}>
+        <span key={idx} className="flex items-center gap-1 min-w-0">
+          {idx > 0 && <ChevronRight size={13} className="flex-shrink-0 text-text-muted" />}
+          <span
+            className={[
+              part.highlight ? 'text-brand font-semibold' : 'text-text-secondary',
+              idx === parts.length - 2 ? 'truncate' : '',
+            ].join(' ')}
+            title={part.label}
+          >
             {part.label}
           </span>
         </span>

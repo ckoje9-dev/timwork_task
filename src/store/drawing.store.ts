@@ -61,6 +61,7 @@ interface DrawingState {
   toggleDiscipline: (discipline: string) => void;
   toggleBookmark: (drawingId: string, discipline: string) => void;
   setCompareMode: (on: boolean) => void;
+  expandDiscipline: (discipline: string) => void;
   toggleDisciplineGroup: (discipline: string) => void;
   setGroupLayerOpacity: (discipline: string, version: string, opacity: number) => void;
 }
@@ -94,7 +95,12 @@ export const useDrawingStore = create<DrawingState>((set) => ({
   },
 
   selectDrawing: async (drawingId, discipline, revisionVersion) => {
-    set({ selection: { drawingId, discipline, revisionVersion }, compareMode: false });
+    // 선택된 공종 섹션을 자동으로 펼침
+    set((s) => ({
+      selection: { drawingId, discipline, revisionVersion },
+      compareMode: false,
+      expandedDisciplines: new Set([...s.expandedDisciplines, discipline]),
+    }));
 
     const drawing = await getDrawingById(drawingId);
     set({ baseDrawingImage: drawing?.image ?? null });
@@ -177,6 +183,12 @@ export const useDrawingStore = create<DrawingState>((set) => ({
   },
 
   setCompareMode: (on) => set({ compareMode: on }),
+
+  expandDiscipline: (discipline) => {
+    set((s) => ({
+      expandedDisciplines: new Set([...s.expandedDisciplines, discipline]),
+    }));
+  },
 
   toggleDisciplineGroup: (discipline) => {
     set((s) => ({
