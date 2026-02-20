@@ -119,7 +119,7 @@ export default function DrawingsPage() {
               <button
                 role="switch"
                 aria-checked={issueVisible}
-                onClick={() => setIssueVisible((v) => !v)}
+                onClick={() => setIssueVisible(!issueVisible)}
                 className={[
                   'relative inline-flex h-5 w-9 flex-shrink-0 rounded-full transition-colors duration-200',
                   issueVisible ? 'bg-brand' : 'bg-gray-200',

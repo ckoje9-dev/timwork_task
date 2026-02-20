@@ -6,10 +6,12 @@ export interface IssuePin {
   id: string;
   drawingId: string;
   discipline: string;
+  revisionVersion: string;
   x: number; // image pixel coordinate
   y: number;
   issueNumber: number;
   title: string;
+  reporter: string; // 성씨 한 글자 표시용
   status: 'open' | 'resolved';
 }
 
@@ -78,7 +80,8 @@ interface DrawingState {
   setCompareMode: (on: boolean) => void;
   setRevisionVersion: (version: string) => void;
   setIssueVisible: (visible: boolean) => void;
-  addIssuePin: (drawingId: string, discipline: string, x: number, y: number) => void;
+  addIssuePin: (drawingId: string, discipline: string, revisionVersion: string, x: number, y: number) => void;
+  removeIssuePin: (id: string) => void;
   expandDiscipline: (discipline: string) => void;
   toggleDisciplineGroup: (discipline: string) => void;
   setGroupLayerOpacity: (discipline: string, version: string, opacity: number) => void;
@@ -206,23 +209,32 @@ export const useDrawingStore = create<DrawingState>((set) => ({
 
   setIssueVisible: (visible) => set({ issueVisible: visible }),
 
-  addIssuePin: (drawingId, discipline, x, y) => {
+  addIssuePin: (drawingId, discipline, revisionVersion, x, y) => {
     set((s) => {
       const count = s.issuePins.filter(
-        (p) => p.drawingId === drawingId && p.discipline === discipline,
+        (p) =>
+          p.drawingId === drawingId &&
+          p.discipline === discipline &&
+          p.revisionVersion === revisionVersion,
       ).length;
       const pin: IssuePin = {
-        id: `${drawingId}-${discipline}-${Date.now()}`,
+        id: `${drawingId}-${discipline}-${revisionVersion}-${Date.now()}`,
         drawingId,
         discipline,
+        revisionVersion,
         x,
         y,
         issueNumber: count + 1,
         title: `새 이슈 #${count + 1}`,
+        reporter: '나',
         status: 'open',
       };
       return { issuePins: [...s.issuePins, pin] };
     });
+  },
+
+  removeIssuePin: (id) => {
+    set((s) => ({ issuePins: s.issuePins.filter((p) => p.id !== id) }));
   },
 
   setRevisionVersion: (version) => {

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { ZoomIn, ZoomOut, Maximize2, ScanSearch, MapPin, User } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, ScanSearch, MapPin, Trash2, Camera } from 'lucide-react';
 import { getImageUrl, getChildDrawings } from '@/api/drawings';
 import { useDrawingStore, type DisciplineGroup, type IssuePin } from '@/store/drawing.store';
 import type { DrawingSelection, Drawing } from '@/types';
@@ -118,7 +118,7 @@ export default function DrawingViewer() {
     const rect = containerEl.getBoundingClientRect();
     const imgX = (e.clientX - rect.left - transform.x) / transform.scale;
     const imgY = (e.clientY - rect.top - transform.y) / transform.scale;
-    addIssuePin(selection.drawingId, selection.discipline, imgX, imgY);
+    addIssuePin(selection.drawingId, selection.discipline, selection.revisionVersion, imgX, imgY);
     setIsAddingIssue(false);
   }, [isAddingIssue, containerEl, selection, transform, addIssuePin]);
 
@@ -158,12 +158,107 @@ export default function DrawingViewer() {
     }));
   }, []);
 
-  const currentImage = getCurrentImage(selection, disciplineGroups, compareMode, baseDrawingImage);
-
   // 비교 모드 기준 공종 레이어의 imageTransform (오버레이 정렬 기준)
   const baseTx = compareMode
     ? disciplineGroups.find((g) => g.discipline === selection?.discipline)?.layers[0]?.imageTransform
     : undefined;
+
+  const currentImage = getCurrentImage(selection, disciplineGroups, compareMode, baseDrawingImage);
+
+  // ── 비교 화면 캡처 ───────────────────────────────────────────
+  const [isCapturing, setIsCapturing] = useState(false);
+
+  const captureView = useCallback(async () => {
+    if (!containerEl || !currentImage || isCapturing) return;
+    setIsCapturing(true);
+
+    try {
+      const width = containerEl.clientWidth;
+      const height = containerEl.clientHeight;
+      const dpr = window.devicePixelRatio || 1;
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.scale(dpr, dpr);
+
+      // 배경
+      ctx.fillStyle = '#f3f4f6';
+      ctx.fillRect(0, 0, width, height);
+
+      const loadImg = (url: string): Promise<HTMLImageElement> =>
+        new Promise((resolve, reject) => {
+          const img = new window.Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = url;
+        });
+
+      const drawLayer = async (
+        src: string,
+        tx: number,
+        ty: number,
+        scale: number,
+        opacity: number,
+        blend: GlobalCompositeOperation = 'source-over',
+        filter = '',
+      ) => {
+        const img = await loadImg(getImageUrl(src));
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        ctx.globalCompositeOperation = blend;
+        if (filter) ctx.filter = filter;
+        ctx.translate(tx, ty);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+      };
+
+      // 기본 이미지
+      await drawLayer(currentImage, transform.x, transform.y, transform.scale, 1);
+
+      // 오버레이 (비교 모드)
+      if (compareMode && baseTx) {
+        for (const group of disciplineGroups) {
+          if (!group.visible) continue;
+          const isSelected = group.discipline === selection?.discipline;
+          const layers = isSelected ? group.layers.slice(1) : group.layers;
+          for (const layer of layers) {
+            const overlayTx = layer.imageTransform;
+            if (!overlayTx || baseTx.scale === 0 || overlayTx.scale === 0) continue;
+            const displayScale = baseTx.scale / overlayTx.scale;
+            const lx = baseTx.x - overlayTx.x * displayScale;
+            const ly = baseTx.y - overlayTx.y * displayScale;
+            const hue = getHueRotate(layer.color);
+            await drawLayer(
+              layer.revision.image,
+              transform.x + lx * transform.scale,
+              transform.y + ly * transform.scale,
+              transform.scale * displayScale,
+              layer.opacity,
+              'multiply',
+              hue !== 0 ? `hue-rotate(${hue}deg) saturate(2)` : 'saturate(2)',
+            );
+          }
+        }
+      }
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `도면비교_${new Date().toISOString().slice(0, 10)}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }, 'image/png');
+    } finally {
+      setIsCapturing(false);
+    }
+  }, [containerEl, currentImage, transform, compareMode, baseTx, disciplineGroups, selection, isCapturing]);
 
   if (!selection) {
     return (
@@ -312,14 +407,15 @@ export default function DrawingViewer() {
         </div>
       </div>
 
-      {/* 이슈 핀 오버레이 */}
-      {issueVisible && (
+      {/* 이슈 핀 오버레이 (비교 모드에서는 숨김) */}
+      {issueVisible && !compareMode && (
         <div className="absolute inset-0" style={{ pointerEvents: 'none', zIndex: 5 }}>
           {issuePins
             .filter(
               (p) =>
                 p.drawingId === selection?.drawingId &&
-                p.discipline === selection?.discipline,
+                p.discipline === selection?.discipline &&
+                p.revisionVersion === selection?.revisionVersion,
             )
             .map((pin) => {
               const sx = pin.x * transform.scale + transform.x;
@@ -345,15 +441,30 @@ export default function DrawingViewer() {
 
       {/* ── 줌 컨트롤 (우측 하단) ─────────────────────────────── */}
       <div className="absolute bottom-4 right-4 flex flex-col gap-1" style={{ zIndex: 10 }}>
-        <button
-          onClick={() => setIsAddingIssue((v) => !v)}
-          className={`btn-icon shadow-card border border-border ${
-            isAddingIssue ? 'bg-brand text-white border-brand' : 'bg-white'
-          }`}
-          title={isAddingIssue ? '이슈 배치 취소 (ESC)' : '이슈 배치'}
-        >
-          <MapPin size={16} />
-        </button>
+        {compareMode ? (
+          <button
+            onClick={captureView}
+            disabled={isCapturing}
+            className="btn-icon bg-white shadow-card border border-border disabled:opacity-50"
+            title="비교 화면 캡처"
+          >
+            {isCapturing ? (
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Camera size={16} />
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={() => setIsAddingIssue((v) => !v)}
+            className={`btn-icon shadow-card border border-border ${
+              isAddingIssue ? 'bg-brand text-white border-brand' : 'bg-white'
+            }`}
+            title={isAddingIssue ? '이슈 배치 취소 (ESC)' : '이슈 배치'}
+          >
+            <MapPin size={16} />
+          </button>
+        )}
         <div className="h-px bg-border mx-1" />
         <button
           onClick={() => zoom(ZOOM_FACTOR)}
@@ -418,26 +529,38 @@ function getCurrentImage(
 // ── 이슈 핀 마커 ────────────────────────────────────────────────
 
 function IssuePinMarker({ pin }: { pin: IssuePin }) {
-  const [hovered, setHovered] = useState(false);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { removeIssuePin } = useDrawingStore();
+
+  // 외부 클릭 시 팝업 닫기
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   return (
-    <div
-      style={{ transform: 'translate(-50%, -100%)' }}
-      className="relative"
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* 아바타 원형 아이콘 */}
-      <div
-        className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg cursor-pointer border-2 border-white transition-transform hover:scale-110 ${
-          pin.status === 'open' ? 'bg-red-500' : 'bg-green-500'
-        }`}
+    <div ref={ref} style={{ transform: 'translate(-50%, -100%)' }} className="relative">
+      {/* 아바타 원형 버튼 */}
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg border-2 border-white transition-transform hover:scale-110 ${
+          open ? 'scale-110' : ''
+        } ${pin.status === 'open' ? 'bg-red-500' : 'bg-green-500'}`}
       >
-        <User size={15} className="text-white" />
-      </div>
+        <span className="text-white text-sm font-bold select-none leading-none">
+          {pin.reporter.charAt(0)}
+        </span>
+      </button>
 
-      {/* 호버 툴팁 */}
-      {hovered && (
+      {/* 클릭 팝업 */}
+      {open && (
         <div
           className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-xl px-3 py-2.5 w-52 shadow-xl"
           style={{ background: 'rgba(17,24,39,0.88)', backdropFilter: 'blur(6px)' }}
@@ -446,9 +569,18 @@ function IssuePinMarker({ pin }: { pin: IssuePin }) {
             [Issue#{pin.issueNumber}]
           </p>
           <p className="text-xs text-white leading-snug">{pin.title}</p>
-          <button className="mt-2 w-full bg-brand text-white text-xs rounded-lg px-2 py-1.5 font-medium hover:opacity-90 transition-opacity">
-            이슈 보기
-          </button>
+          <div className="mt-2 flex items-center gap-1.5">
+            <button className="flex-1 bg-brand text-white text-xs rounded-lg px-2 py-1.5 font-medium hover:opacity-90 transition-opacity">
+              이슈 보기
+            </button>
+            <button
+              onClick={() => removeIssuePin(pin.id)}
+              title="삭제"
+              className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg bg-white/10 hover:bg-red-500/80 text-white/60 hover:text-white transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
         </div>
       )}
     </div>
