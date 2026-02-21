@@ -221,3 +221,20 @@ export async function getIssueGroups(): Promise<string[]> {
   if (apiConfig.useMock) return mockDelay(_getIssueGroups());
   return apiFetch<string[]>('/issues/groups');
 }
+
+export async function createIssue(
+  data: Omit<Issue, 'id' | 'number' | 'publishedAt'>,
+): Promise<Issue> {
+  if (apiConfig.useMock) {
+    const nextNumber = Math.max(...MOCK_ISSUES.map((i) => i.number)) + 1;
+    const issue: Issue = {
+      ...data,
+      id: `issue-${nextNumber}`,
+      number: nextNumber,
+      publishedAt: new Date().toISOString().slice(0, 10),
+    };
+    MOCK_ISSUES.push(issue);
+    return mockDelay(issue);
+  }
+  return apiFetch<Issue>('/issues', { method: 'POST', body: JSON.stringify(data) });
+}

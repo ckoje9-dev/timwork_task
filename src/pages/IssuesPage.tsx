@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, Plus, RotateCcw } from 'lucide-react';
 import { useIssueStore } from '@/store/issue.store';
 import IssueDetailModal from '@/components/issues/IssueDetailModal';
+import IssueCreateModal from '@/components/issues/IssueCreateModal';
 import type { Issue, IssueStatus, IssuePriority } from '@/types';
 
 // ── 상수 ─────────────────────────────────────────────────────
@@ -65,9 +66,11 @@ export default function IssuesPage() {
     clearSelectedIssue,
     setFilter,
     resetFilter,
+    createIssue,
   } = useIssueStore();
 
   const [keywordInput, setKeywordInput] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     loadIssues();
@@ -152,7 +155,7 @@ export default function IssuesPage() {
 
         {/* 이슈 생성 (우측 정렬) */}
         <div className="ml-auto">
-          <button className="btn-primary">
+          <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
             <Plus size={14} />
             이슈 생성
           </button>
@@ -210,6 +213,18 @@ export default function IssuesPage() {
       {/* ── 이슈 상세 모달 ──────────────────────────────────── */}
       {selectedIssue && (
         <IssueDetailModal issue={selectedIssue} onClose={clearSelectedIssue} />
+      )}
+
+      {/* ── 이슈 생성 모달 ──────────────────────────────────── */}
+      {showCreateModal && (
+        <IssueCreateModal
+          groups={groups}
+          onClose={() => setShowCreateModal(false)}
+          onSubmit={async (data) => {
+            await createIssue(data);
+            setShowCreateModal(false);
+          }}
+        />
       )}
     </div>
   );
