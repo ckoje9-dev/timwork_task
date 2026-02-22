@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Search, Plus, RotateCcw } from 'lucide-react';
+import { Search, Plus, RotateCcw, PlusCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { useIssueStore } from '@/store/issue.store';
 import IssueDetailModal from '@/components/issues/IssueDetailModal';
 import IssueCreateModal from '@/components/issues/IssueCreateModal';
-import type { Issue, IssueStatus, IssuePriority } from '@/types';
+import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
 
 // ── 상수 ─────────────────────────────────────────────────────
 
@@ -107,7 +107,20 @@ export default function IssuesPage() {
           />
         </form>
 
-        {/* 유형 (그룹) 필터 */}
+        {/* 유형 필터 */}
+        <select
+          value={filter.type}
+          onChange={(e) => setFilter({ type: e.target.value as IssueType | 'ALL' })}
+          className="select w-28 text-sm"
+        >
+          <option value="ALL">전체 유형</option>
+          <option value="추가">추가</option>
+          <option value="수정">수정</option>
+          <option value="삭제">삭제</option>
+          <option value="간섭">간섭</option>
+        </select>
+
+        {/* 그룹 필터 */}
         <select
           value={filter.group}
           onChange={(e) => setFilter({ group: e.target.value })}
@@ -230,6 +243,27 @@ export default function IssuesPage() {
   );
 }
 
+// ── 유형 아이콘 컴포넌트 ──────────────────────────────────────
+
+const TYPE_ICON_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color: string; label: string }> = {
+  추가: { icon: <PlusCircle size={13} />, bg: 'bg-green-500/15', color: 'text-green-500', label: '추가' },
+  수정: { icon: <Pencil size={13} />, bg: 'bg-blue-500/15', color: 'text-blue-500', label: '수정' },
+  삭제: { icon: <Trash2 size={13} />, bg: 'bg-red-500/15', color: 'text-red-500', label: '삭제' },
+  간섭: { icon: <AlertTriangle size={13} />, bg: 'bg-amber-500/15', color: 'text-amber-500', label: '간섭' },
+};
+
+function IssueTypeIcon({ type }: { type: IssueType }) {
+  const cfg = TYPE_ICON_CONFIG[type];
+  return (
+    <div
+      className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${cfg.bg} ${cfg.color}`}
+      title={cfg.label}
+    >
+      {cfg.icon}
+    </div>
+  );
+}
+
 // ── 이슈 행 컴포넌트 ─────────────────────────────────────────
 
 function IssueRow({ issue, onClick }: { issue: Issue; onClick: () => void }) {
@@ -240,9 +274,9 @@ function IssueRow({ issue, onClick }: { issue: Issue; onClick: () => void }) {
                  px-4 py-3 border-b border-border text-left hover:bg-surface-hover
                  transition-colors group"
     >
-      {/* 유형 색상 블록 */}
+      {/* 유형 아이콘 */}
       <div className="flex items-center">
-        <div className="w-5 h-5 rounded bg-brand/80" />
+        <IssueTypeIcon type={issue.type} />
       </div>
 
       {/* 번호 */}

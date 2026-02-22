@@ -1,5 +1,5 @@
-import { X, ChevronDown } from 'lucide-react';
-import type { Issue, IssueStatus, IssuePriority } from '@/types';
+import { X, ChevronDown, PlusCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
 
 interface Props {
   issue: Issue;
@@ -34,6 +34,13 @@ const PRIORITY_CLASS: Record<IssuePriority, string> = {
   URGENT: 'pill-urgent',
 };
 
+const TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color: string; label: string }> = {
+  추가: { icon: <PlusCircle size={12} />, bg: 'bg-green-500/15', color: 'text-green-500', label: '추가' },
+  수정: { icon: <Pencil size={12} />, bg: 'bg-blue-500/15', color: 'text-blue-500', label: '수정' },
+  삭제: { icon: <Trash2 size={12} />, bg: 'bg-red-500/15', color: 'text-red-500', label: '삭제' },
+  간섭: { icon: <AlertTriangle size={12} />, bg: 'bg-amber-500/15', color: 'text-amber-500', label: '간섭' },
+};
+
 export default function IssueDetailModal({ issue, onClose }: Props) {
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -45,7 +52,14 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
         {/* 헤더 */}
         <div className="modal-header">
           <div className="flex items-center gap-2">
-            <div className="w-4 h-4 rounded-sm bg-white/20" />
+            {(() => {
+              const cfg = TYPE_CONFIG[issue.type];
+              return (
+                <div className={`w-5 h-5 rounded flex items-center justify-center ${cfg.bg} ${cfg.color}`}>
+                  {cfg.icon}
+                </div>
+              );
+            })()}
             <span className="font-semibold">ISSUE#{issue.number}</span>
           </div>
           <button onClick={onClose} className="btn-icon text-white/80 hover:text-white hover:bg-white/10">
@@ -114,6 +128,18 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
 
               {/* 상세 정보 그리드 */}
               <div className="space-y-3 text-sm">
+                <MetaRow
+                  label="유형"
+                  value={(() => {
+                    const cfg = TYPE_CONFIG[issue.type];
+                    return (
+                      <span className={`flex items-center gap-1 text-xs font-medium ${cfg.color}`}>
+                        {cfg.icon}
+                        {cfg.label}
+                      </span>
+                    );
+                  })()}
+                />
                 <MetaRow label="담당자" value={issue.assignee} avatar />
                 <MetaRow label="보고자" value={issue.reporter} avatar secondary />
                 <MetaRow label="그룹" value={issue.group ?? '—'} />
@@ -125,7 +151,7 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
                     </span>
                   }
                 />
-                <MetaRow label="발행일" value={issue.publishedAt} />
+                <MetaRow label="발행일" value={issue.publishedAt.slice(0, 10)} />
                 <MetaRow label="마감일" value={issue.dueDate} />
                 <MetaRow label="레이블" value={issue.labels.join(', ') || '—'} />
               </div>

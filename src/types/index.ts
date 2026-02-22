@@ -94,10 +94,12 @@ export interface DrawingSelection {
 
 export type IssueStatus = 'TODO' | 'IN_PROGRESS' | 'IN_REVIEW' | 'DONE';
 export type IssuePriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+export type IssueType = '추가' | '수정' | '삭제' | '간섭';
 
 export interface Issue {
   id: string;
   number: number;
+  type: IssueType;
   title: string;
   content: string;
   status: IssueStatus;
@@ -116,6 +118,7 @@ export interface IssueFilter {
   status: IssueStatus | 'ALL';
   priority: IssuePriority | 'ALL';
   group: string | 'ALL';
+  type: IssueType | 'ALL';
 }
 
 // ============================================================

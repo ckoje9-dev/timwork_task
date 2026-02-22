@@ -26,6 +26,7 @@ const DEFAULT_FILTER: IssueFilter = {
   status: 'ALL',
   priority: 'ALL',
   group: 'ALL',
+  type: 'ALL',
 };
 
 export const useIssueStore = create<IssueState>((set, get) => ({

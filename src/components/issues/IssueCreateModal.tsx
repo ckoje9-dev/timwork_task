@@ -1,10 +1,11 @@
 import { useState, KeyboardEvent } from 'react';
 import { X, Plus } from 'lucide-react';
-import type { IssueStatus, IssuePriority } from '@/types';
+import type { IssueStatus, IssuePriority, IssueType } from '@/types';
 
 // ── 타입 ─────────────────────────────────────────────────────
 
 export interface CreateIssueData {
+  type: IssueType;
   title: string;
   content: string;
   status: IssueStatus;
@@ -25,6 +26,13 @@ interface Props {
 }
 
 // ── 상수 ─────────────────────────────────────────────────────
+
+const TYPE_OPTIONS: { value: IssueType; label: string }[] = [
+  { value: '추가', label: '추가' },
+  { value: '수정', label: '수정' },
+  { value: '삭제', label: '삭제' },
+  { value: '간섭', label: '간섭' },
+];
 
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
   { value: 'TODO', label: 'TODO' },
@@ -50,12 +58,13 @@ const STATUS_CLASS: Record<IssueStatus, string> = {
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
 export default function IssueCreateModal({ groups, onClose, onSubmit, initialRelatedDrawings }: Props) {
+  const [type, setType] = useState<IssueType>('추가');
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [status, setStatus] = useState<IssueStatus>('TODO');
   const [priority, setPriority] = useState<IssuePriority>('MEDIUM');
   const [assignee, setAssignee] = useState('');
-  const [reporter, setReporter] = useState('');
+  const [reporter, setReporter] = useState('양승호');
   const [group, setGroup] = useState('');
   const [dueDate, setDueDate] = useState('');
   const [labelInput, setLabelInput] = useState('');
@@ -91,6 +100,7 @@ export default function IssueCreateModal({ groups, onClose, onSubmit, initialRel
   const handleSubmit = () => {
     if (!title.trim()) return;
     onSubmit({
+      type,
       title: title.trim(),
       content,
       status,
@@ -129,15 +139,28 @@ export default function IssueCreateModal({ groups, onClose, onSubmit, initialRel
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* 좌측: 제목 / 내용 / 연관 도면 */}
           <div className="flex-1 overflow-y-auto p-5 flex flex-col gap-4">
-            {/* 제목 */}
-            <input
-              type="text"
-              placeholder="이슈 제목을 입력하세요"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="input w-full text-base font-semibold"
-              autoFocus
-            />
+            {/* 유형 + 제목 */}
+            <div className="flex gap-2 items-center">
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as IssueType)}
+                className="select text-sm flex-shrink-0 w-20"
+              >
+                {TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                placeholder="이슈 제목을 입력하세요"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="input flex-1 text-base font-semibold"
+                autoFocus
+              />
+            </div>
 
             {/* 내용 */}
             <div>
