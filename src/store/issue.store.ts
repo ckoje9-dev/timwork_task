@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Issue, IssueFilter } from '@/types';
-import { getIssues, getIssueById, getIssueGroups, createIssue as apiCreateIssue } from '@/api/issues';
+import { getIssues, getIssueById, getIssueGroups, createIssue as apiCreateIssue, deleteIssue as apiDeleteIssue } from '@/api/issues';
 import type { CreateIssueData } from '@/components/issues/IssueCreateModal';
 
 interface IssueState {
@@ -17,7 +17,8 @@ interface IssueState {
   clearSelectedIssue: () => void;
   setFilter: (patch: Partial<IssueFilter>) => void;
   resetFilter: () => void;
-  createIssue: (data: CreateIssueData) => Promise<void>;
+  createIssue: (data: CreateIssueData) => Promise<Issue>;
+  deleteIssue: (id: string) => Promise<void>;
 }
 
 const DEFAULT_FILTER: IssueFilter = {
@@ -68,7 +69,14 @@ export const useIssueStore = create<IssueState>((set, get) => ({
   },
 
   createIssue: async (data) => {
-    await apiCreateIssue(data);
+    const issue = await apiCreateIssue(data);
+    await get().loadIssues();
+    await get().loadGroups();
+    return issue;
+  },
+
+  deleteIssue: async (id) => {
+    await apiDeleteIssue(id);
     await get().loadIssues();
     await get().loadGroups();
   },

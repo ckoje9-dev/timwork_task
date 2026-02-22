@@ -222,6 +222,15 @@ export async function getIssueGroups(): Promise<string[]> {
   return apiFetch<string[]>('/issues/groups');
 }
 
+export async function deleteIssue(id: string): Promise<void> {
+  if (apiConfig.useMock) {
+    const idx = MOCK_ISSUES.findIndex((i) => i.id === id);
+    if (idx !== -1) MOCK_ISSUES.splice(idx, 1);
+    return mockDelay(undefined);
+  }
+  return apiFetch<void>(`/issues/${id}`, { method: 'DELETE' });
+}
+
 export async function createIssue(
   data: Omit<Issue, 'id' | 'number' | 'publishedAt'>,
 ): Promise<Issue> {

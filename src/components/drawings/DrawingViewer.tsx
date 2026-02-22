@@ -2,7 +2,10 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, ScanSearch, MapPin, Trash2, Camera } from 'lucide-react';
 import { getImageUrl, getChildDrawings } from '@/api/drawings';
 import { useDrawingStore, type DisciplineGroup, type IssuePin } from '@/store/drawing.store';
-import type { DrawingSelection, Drawing } from '@/types';
+import { useIssueStore } from '@/store/issue.store';
+import IssueCreateModal from '@/components/issues/IssueCreateModal';
+import IssueDetailModal from '@/components/issues/IssueDetailModal';
+import type { DrawingSelection, Drawing, Issue } from '@/types';
 
 interface Transform {
   x: number;
@@ -24,10 +27,19 @@ export default function DrawingViewer() {
   // ref로 드래그 시작 상태 관리 (재렌더링 없이 최신값 유지)
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; tx: number; ty: number } | null>(null);
 
-  const { selection, compareMode, disciplineGroups, baseDrawingImage, tree, selectDrawing, issueVisible, issuePins, addIssuePin } = useDrawingStore();
+  const { selection, compareMode, disciplineGroups, baseDrawingImage, tree, selectDrawing, issueVisible, issuePins, addIssuePin, removeIssuePin, updateIssuePinData } = useDrawingStore();
+  const { groups: issueGroups, issues, createIssue, deleteIssue, loadGroups, loadIssues } = useIssueStore();
   const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
   const [childDrawings, setChildDrawings] = useState<Drawing[]>([]);
   const [isAddingIssue, setIsAddingIssue] = useState(false);
+  const [newPinId, setNewPinId] = useState<string | null>(null);
+  const [newPinDrawingLabel, setNewPinDrawingLabel] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [viewingIssue, setViewingIssue] = useState<Issue | null>(null);
+
+  // 이슈 그룹·목록 로드 (이슈 생성/보기 모달에서 사용)
+  useEffect(() => { loadGroups(); loadIssues(); }, [loadGroups, loadIssues]);
 
   // 전체 배치도일 때 자식 도면 목록 로드
   useEffect(() => {
@@ -118,9 +130,15 @@ export default function DrawingViewer() {
     const rect = containerEl.getBoundingClientRect();
     const imgX = (e.clientX - rect.left - transform.x) / transform.scale;
     const imgY = (e.clientY - rect.top - transform.y) / transform.scale;
-    addIssuePin(selection.drawingId, selection.discipline, selection.revisionVersion, imgX, imgY);
+    // pinId를 미리 생성하여 신규 핀 추적
+    const pinId = `${selection.drawingId}-${selection.discipline}-${selection.revisionVersion}-${Date.now()}`;
+    const node = tree[selection.discipline]?.find((n) => n.drawingId === selection.drawingId);
+    const drawingLabel = node?.drawingName ?? selection.drawingId;
+    addIssuePin(selection.drawingId, selection.discipline, selection.revisionVersion, imgX, imgY, pinId);
+    setNewPinId(pinId);
+    setNewPinDrawingLabel(drawingLabel);
     setIsAddingIssue(false);
-  }, [isAddingIssue, containerEl, selection, transform, addIssuePin]);
+  }, [isAddingIssue, containerEl, selection, transform, tree, addIssuePin]);
 
   // ── 휠 줌 ──────────────────────────────────────────────────
   useEffect(() => {
@@ -425,7 +443,19 @@ export default function DrawingViewer() {
                   key={pin.id}
                   style={{ position: 'absolute', left: sx, top: sy, pointerEvents: 'auto' }}
                 >
-                  <IssuePinMarker pin={pin} />
+                  <IssuePinMarker
+                    pin={pin}
+                    isNew={pin.id === newPinId}
+                    onWriteIssue={() => setShowCreateModal(true)}
+                    onViewIssue={() => {
+                      const issue = issues.find((i) => i.id === pin.issueId);
+                      if (issue) setViewingIssue(issue);
+                    }}
+                    onDelete={() => {
+                      removeIssuePin(pin.id);
+                      if (pin.issueId) deleteIssue(pin.issueId);
+                    }}
+                  />
                 </div>
               );
             })}
@@ -486,6 +516,45 @@ export default function DrawingViewer() {
         </button>
       </div>
 
+
+
+      {/* 이슈 생성 모달 (핀 배치 후 이슈 작성) */}
+      {showCreateModal && (
+        <IssueCreateModal
+          groups={issueGroups}
+          initialRelatedDrawings={newPinDrawingLabel ? [newPinDrawingLabel] : []}
+          onClose={() => {
+            setShowCreateModal(false);
+            // 이슈 미작성 시 핀 삭제 여부 확인
+            if (newPinId) setShowCancelConfirm(true);
+          }}
+          onSubmit={async (data) => {
+            const issue = await createIssue(data);
+            if (newPinId) {
+              updateIssuePinData(newPinId, issue.id, issue.title, issue.number);
+            }
+            setShowCreateModal(false);
+            setNewPinId(null);
+          }}
+        />
+      )}
+
+      {/* 이슈 미작성 핀 삭제 확인 */}
+      {showCancelConfirm && newPinId && (
+        <PinDeleteConfirm
+          onConfirm={() => {
+            removeIssuePin(newPinId);
+            setNewPinId(null);
+            setShowCancelConfirm(false);
+          }}
+          onCancel={() => { setShowCancelConfirm(false); setShowCreateModal(true); }}
+        />
+      )}
+
+      {/* 이슈 상세 보기 모달 */}
+      {viewingIssue && (
+        <IssueDetailModal issue={viewingIssue} onClose={() => setViewingIssue(null)} />
+      )}
     </div>
   );
 }
@@ -528,10 +597,9 @@ function getCurrentImage(
 
 // ── 이슈 핀 마커 ────────────────────────────────────────────────
 
-function IssuePinMarker({ pin }: { pin: IssuePin }) {
-  const [open, setOpen] = useState(false);
+function IssuePinMarker({ pin, isNew, onWriteIssue, onViewIssue, onDelete }: { pin: IssuePin; isNew: boolean; onWriteIssue: () => void; onViewIssue: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(isNew); // 신규 핀이면 팝업 자동 열기
   const ref = useRef<HTMLDivElement>(null);
-  const { removeIssuePin } = useDrawingStore();
 
   // 외부 클릭 시 팝업 닫기
   useEffect(() => {
@@ -570,11 +638,24 @@ function IssuePinMarker({ pin }: { pin: IssuePin }) {
           </p>
           <p className="text-xs text-white leading-snug">{pin.title}</p>
           <div className="mt-2 flex items-center gap-1.5">
-            <button className="flex-1 bg-brand text-white text-xs rounded-lg px-2 py-1.5 font-medium hover:opacity-90 transition-opacity">
-              이슈 보기
-            </button>
+            {isNew ? (
+              <button
+                onClick={() => { setOpen(false); onWriteIssue(); }}
+                className="flex-1 bg-brand text-white text-xs rounded-lg px-2 py-1.5 font-medium hover:opacity-90 transition-opacity"
+              >
+                이슈 작성
+              </button>
+            ) : (
+              <button
+                onClick={() => { setOpen(false); onViewIssue(); }}
+                disabled={!pin.issueId}
+                className="flex-1 bg-brand text-white text-xs rounded-lg px-2 py-1.5 font-medium hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                이슈 보기
+              </button>
+            )}
             <button
-              onClick={() => removeIssuePin(pin.id)}
+              onClick={onDelete}
               title="삭제"
               className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg bg-white/10 hover:bg-red-500/80 text-white/60 hover:text-white transition-colors"
             >
@@ -583,6 +664,30 @@ function IssuePinMarker({ pin }: { pin: IssuePin }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── 핀 삭제 확인 다이얼로그 ──────────────────────────────────────
+
+function PinDeleteConfirm({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-xl shadow-xl w-72 p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-sm font-semibold text-text-primary mb-2">이슈 작성을 취소하셨습니다</h3>
+        <p className="text-xs text-text-secondary mb-4">
+          이슈를 작성하지 않으면 배치된 핀이 삭제됩니다.<br />핀을 삭제하시겠습니까?
+        </p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="btn-ghost text-sm">아니오</button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            예, 삭제
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

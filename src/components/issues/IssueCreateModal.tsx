@@ -21,6 +21,7 @@ interface Props {
   groups: string[];
   onClose: () => void;
   onSubmit: (data: CreateIssueData) => void;
+  initialRelatedDrawings?: string[];
 }
 
 // ── 상수 ─────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ const STATUS_CLASS: Record<IssueStatus, string> = {
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
-export default function IssueCreateModal({ groups, onClose, onSubmit }: Props) {
+export default function IssueCreateModal({ groups, onClose, onSubmit, initialRelatedDrawings }: Props) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [status, setStatus] = useState<IssueStatus>('TODO');
@@ -60,7 +61,7 @@ export default function IssueCreateModal({ groups, onClose, onSubmit }: Props) {
   const [labelInput, setLabelInput] = useState('');
   const [labels, setLabels] = useState<string[]>([]);
   const [drawingInput, setDrawingInput] = useState('');
-  const [relatedDrawings, setRelatedDrawings] = useState<string[]>([]);
+  const [relatedDrawings, setRelatedDrawings] = useState<string[]>(initialRelatedDrawings ?? []);
 
   // 태그 추가 헬퍼
   const addTag = (

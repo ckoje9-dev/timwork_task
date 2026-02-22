@@ -13,6 +13,7 @@ export interface IssuePin {
   title: string;
   reporter: string; // 성씨 한 글자 표시용
   status: 'open' | 'resolved';
+  issueId?: string; // 연결된 이슈 ID
 }
 
 export interface LayerItem {
@@ -83,7 +84,7 @@ interface DrawingState {
   setCompareMode: (on: boolean) => void;
   setRevisionVersion: (version: string) => void;
   setIssueVisible: (visible: boolean) => void;
-  addIssuePin: (drawingId: string, discipline: string, revisionVersion: string, x: number, y: number) => void;
+  addIssuePin: (drawingId: string, discipline: string, revisionVersion: string, x: number, y: number, pinId?: string) => void;
   removeIssuePin: (id: string) => void;
   expandDiscipline: (discipline: string) => void;
   toggleDisciplineGroup: (discipline: string) => void;
@@ -91,6 +92,7 @@ interface DrawingState {
   deleteDrawing: (drawingId: string, discipline: string) => void;
   addDrawingToTree: (node: DrawingTreeNode) => void;
   updateDrawingRevision: (drawingId: string, discipline: string, revision: Revision) => void;
+  updateIssuePinData: (pinId: string, issueId: string, title: string, issueNumber: number) => void;
 }
 
 export const useDrawingStore = create<DrawingState>((set) => ({
@@ -246,7 +248,7 @@ export const useDrawingStore = create<DrawingState>((set) => ({
 
   setIssueVisible: (visible) => set({ issueVisible: visible }),
 
-  addIssuePin: (drawingId, discipline, revisionVersion, x, y) => {
+  addIssuePin: (drawingId, discipline, revisionVersion, x, y, pinId) => {
     set((s) => {
       const count = s.issuePins.filter(
         (p) =>
@@ -255,7 +257,7 @@ export const useDrawingStore = create<DrawingState>((set) => ({
           p.revisionVersion === revisionVersion,
       ).length;
       const pin: IssuePin = {
-        id: `${drawingId}-${discipline}-${revisionVersion}-${Date.now()}`,
+        id: pinId ?? `${drawingId}-${discipline}-${revisionVersion}-${Date.now()}`,
         drawingId,
         discipline,
         revisionVersion,
@@ -349,6 +351,14 @@ export const useDrawingStore = create<DrawingState>((set) => ({
         },
       };
     });
+  },
+
+  updateIssuePinData: (pinId, issueId, title, issueNumber) => {
+    set((s) => ({
+      issuePins: s.issuePins.map((p) =>
+        p.id === pinId ? { ...p, issueId, title, issueNumber } : p,
+      ),
+    }));
   },
 
   updateDrawingRevision: (drawingId, discipline, revision) => {
