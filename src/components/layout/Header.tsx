@@ -1,15 +1,15 @@
 import { ChevronDown, Bell, User } from 'lucide-react';
-
-const PROJECT_NAME = 'Demo Project – 마곡동 주민공동시설';
+import { useDrawingStore } from '@/store/drawing.store';
 
 export default function Header() {
+  const projectName = useDrawingStore((s) => s.projectName);
   return (
     <header className="h-header flex-shrink-0 bg-white border-b border-border flex items-center justify-between px-5 z-10">
       {/* 프로젝트 선택 */}
       <div className="flex items-center gap-2">
         <div className="w-5 h-5 rounded bg-brand" />
         <button className="flex items-center gap-1.5 text-text-primary font-medium hover:text-brand transition-colors">
-          <span className="text-sm">{PROJECT_NAME}</span>
+          <span className="text-sm">{projectName || 'Demo Project'}</span>
           <ChevronDown size={15} className="text-text-muted" />
         </button>
       </div>

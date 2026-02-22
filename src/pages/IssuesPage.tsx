@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, Plus, RotateCcw, PlusCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { useIssueStore } from '@/store/issue.store';
+import { useDrawingStore } from '@/store/drawing.store';
 import IssueDetailModal from '@/components/issues/IssueDetailModal';
 import IssueCreateModal from '@/components/issues/IssueCreateModal';
 import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
@@ -68,6 +69,7 @@ export default function IssuesPage() {
     resetFilter,
     createIssue,
   } = useIssueStore();
+  const projectName = useDrawingStore((s) => s.projectName);
 
   const [keywordInput, setKeywordInput] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -86,7 +88,7 @@ export default function IssuesPage() {
     <div className="p-6 h-full flex flex-col">
       {/* 브레드크럼 */}
       <div className="mb-4">
-        <p className="text-xs text-text-muted mb-0.5">Demo Project – 마곡동 주민공동시설</p>
+        <p className="text-xs text-text-muted mb-0.5">{projectName || 'Demo Project'}</p>
         <h1 className="text-xl font-bold text-text-primary">이슈</h1>
       </div>
 

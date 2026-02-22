@@ -371,6 +371,164 @@ export default function DrawingViewer() {
             });
           })}
 
+          {/* 리비전 폴리곤 오버레이 */}
+          {imageDimensions && (() => {
+            const currentGroup = disciplineGroups.find((g) => g.discipline === selection.discipline);
+            if (!currentGroup) return null;
+
+            // polygon vertex는 global 좌표계(base PNG 픽셀 공간)에 저장됨
+            // revision JPEG 픽셀 공간으로 변환:
+            //   rev_px = (gx - tx.x) / tx.scale + imageWidth/2
+            //   rev_py = (gy - tx.y) / tx.scale + imageHeight/2
+            const W2 = imageDimensions.w / 2;
+            const H2 = imageDimensions.h / 2;
+
+            const toRevPx = (
+              vertices: [number, number][],
+              tx: { x: number; y: number; scale: number },
+            ) =>
+              vertices
+                .map(([gx, gy]) => `${(gx - tx.x) / tx.scale + W2},${(gy - tx.y) / tx.scale + H2}`)
+                .join(' ');
+
+            if (!compareMode) {
+              // 일반 모드: 현재 레이어의 imageTransform으로 좌표 변환
+              const currentLayer =
+                currentGroup.layers.find((l) => l.revision.version === selection.revisionVersion) ??
+                currentGroup.layers[0];
+              const tx = currentLayer?.imageTransform;
+              if (!tx) return null;
+
+              const elems: React.ReactNode[] = [];
+
+              // ① discipline polygon (전체 외곽선) — 회색 점선
+              if (currentGroup.disciplinePolygon) {
+                elems.push(
+                  <polygon
+                    key="disc"
+                    points={toRevPx(currentGroup.disciplinePolygon.vertices, tx)}
+                    fill="none"
+                    stroke="#94A3B8"
+                    strokeWidth={3}
+                    strokeDasharray="10,6"
+                    strokeLinejoin="round"
+                    opacity={0.6}
+                  />,
+                );
+              }
+
+              // ② region polygons (구역 경계) — 공종 색상 계열 점선
+              if (currentGroup.regionPolygons) {
+                const regionColors = ['#F59E0B', '#10B981', '#8B5CF6', '#EF4444'];
+                currentGroup.regionPolygons.forEach(({ name, polygon }, i) => {
+                  elems.push(
+                    <polygon
+                      key={`region-${name}`}
+                      points={toRevPx(polygon.vertices, tx)}
+                      fill="none"
+                      stroke={regionColors[i % regionColors.length]}
+                      strokeWidth={3}
+                      strokeDasharray="12,6"
+                      strokeLinejoin="round"
+                      opacity={0.65}
+                    />,
+                  );
+                });
+              }
+
+              // ③ revision polygon (현재 리비전 커버리지) — 파란 점선
+              if (currentLayer?.revision.polygon) {
+                elems.push(
+                  <polygon
+                    key="rev"
+                    points={toRevPx(currentLayer.revision.polygon.vertices, tx)}
+                    fill="rgba(37,99,235,0.06)"
+                    stroke="#2563EB"
+                    strokeWidth={6}
+                    strokeDasharray="20,12"
+                    strokeLinejoin="round"
+                  />,
+                );
+              }
+
+              if (elems.length === 0) return null;
+              return (
+                <svg
+                  style={{ position: 'absolute', top: 0, left: 0, width: imageDimensions.w, height: imageDimensions.h, pointerEvents: 'none' }}
+                  viewBox={`0 0 ${imageDimensions.w} ${imageDimensions.h}`}
+                >
+                  {elems}
+                </svg>
+              );
+            }
+
+            // 비교 모드: 모든 가시 그룹의 모든 polygon을 baseTx 기준 pixel 공간으로 변환
+            if (!baseTx) return null;
+            const polygonElems: React.ReactNode[] = [];
+            const regionColors = ['#F59E0B', '#10B981', '#8B5CF6', '#EF4444'];
+            for (const group of disciplineGroups) {
+              if (!group.visible) continue;
+
+              // discipline polygon
+              if (group.disciplinePolygon) {
+                polygonElems.push(
+                  <polygon
+                    key={`disc-${group.discipline}`}
+                    points={toRevPx(group.disciplinePolygon.vertices, baseTx)}
+                    fill="none"
+                    stroke="#94A3B8"
+                    strokeWidth={2}
+                    strokeDasharray="8,5"
+                    strokeLinejoin="round"
+                    opacity={0.5}
+                  />,
+                );
+              }
+
+              // region polygons
+              group.regionPolygons?.forEach(({ name, polygon }, i) => {
+                polygonElems.push(
+                  <polygon
+                    key={`region-${group.discipline}-${name}`}
+                    points={toRevPx(polygon.vertices, baseTx)}
+                    fill="none"
+                    stroke={regionColors[i % regionColors.length]}
+                    strokeWidth={2}
+                    strokeDasharray="10,5"
+                    strokeLinejoin="round"
+                    opacity={0.6}
+                  />,
+                );
+              });
+
+              // revision polygons
+              for (const layer of group.layers) {
+                if (!layer.revision.polygon) continue;
+                polygonElems.push(
+                  <polygon
+                    key={`rev-${group.discipline}-${layer.revision.version}`}
+                    points={toRevPx(layer.revision.polygon.vertices, baseTx)}
+                    fill="none"
+                    stroke={layer.color}
+                    strokeWidth={4}
+                    strokeDasharray="16,8"
+                    strokeLinejoin="round"
+                    opacity={0.7}
+                  />,
+                );
+              }
+            }
+            if (polygonElems.length === 0) return null;
+            return (
+              <svg
+                style={{ position: 'absolute', top: 0, left: 0, width: imageDimensions.w, height: imageDimensions.h, pointerEvents: 'none' }}
+                viewBox={`0 0 ${imageDimensions.w} ${imageDimensions.h}`}
+              >
+                {polygonElems}
+              </svg>
+            );
+          })()}
+
           {/* 전체 배치도: 자식 도면 폴리곤 클릭 영역 */}
           {selection?.drawingId === '00' && imageDimensions && childDrawings.length > 0 && (
             <svg

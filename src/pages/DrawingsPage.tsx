@@ -634,6 +634,16 @@ function RevisionPicker({
                 {layer.revision.description && (
                   <span className="text-text-muted truncate">{layer.revision.description}</span>
                 )}
+                {layer.revision.changes.length > 0 && (
+                  <ul className="mt-0.5 space-y-0.5">
+                    {layer.revision.changes.map((c, i) => (
+                      <li key={i} className="flex items-start gap-1 text-[10px] text-text-muted">
+                        <span className="mt-px opacity-50">·</span>
+                        <span>{c}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </button>
             );
           })}

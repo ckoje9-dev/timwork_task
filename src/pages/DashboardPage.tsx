@@ -34,6 +34,7 @@ const ISSUE_CHART_SEGMENTS = (stats: IssueStats) => [
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [issueStats, setIssueStats] = useState<IssueStats | null>(null);
+  const projectName = useDrawingStore((s) => s.projectName);
 
   useEffect(() => {
     getDashboard().then(setData);
@@ -54,7 +55,7 @@ export default function DashboardPage() {
     <div className="p-6 space-y-5">
       {/* 브레드크럼 */}
       <div>
-        <p className="text-xs text-text-muted mb-0.5">Demo Project – 마곡동 주민공동시설</p>
+        <p className="text-xs text-text-muted mb-0.5">{projectName || 'Demo Project'}</p>
         <h1 className="text-xl font-bold text-text-primary">대시보드</h1>
       </div>
 

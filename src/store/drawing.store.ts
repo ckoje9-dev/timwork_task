@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { DrawingTreeByDiscipline, DrawingSelection, DrawingTreeNode, Revision, ImageTransform } from '@/types';
-import { getDrawingTree, getDrawingById } from '@/api/drawings';
+import type { DrawingTreeByDiscipline, DrawingSelection, DrawingTreeNode, Revision, ImageTransform, DrawingPolygon } from '@/types';
+import { getDrawingTree, getDrawingById, getMetadata } from '@/api/drawings';
 import { useRecentStore } from './recent.store';
 
 export interface IssuePin {
@@ -29,6 +29,8 @@ export interface DisciplineGroup {
   drawingName: string;
   visible: boolean;
   layers: LayerItem[]; // 최신 리비전이 앞 (newest first)
+  disciplinePolygon?: DrawingPolygon;
+  regionPolygons?: { name: string; polygon: DrawingPolygon }[];
 }
 
 // 공종별 색상 팔레트 (같은 톤, 리비전마다 명도 변화)
@@ -48,6 +50,9 @@ function getDisciplineColors(discipline: string): string[] {
 }
 
 interface DrawingState {
+  // 프로젝트 메타
+  projectName: string;
+
   // 트리 데이터
   tree: DrawingTreeByDiscipline;
   treeLoading: boolean;
@@ -97,6 +102,7 @@ interface DrawingState {
 }
 
 export const useDrawingStore = create<DrawingState>((set, get) => ({
+  projectName: '',
   tree: {},
   treeLoading: false,
   selection: null,
@@ -114,8 +120,8 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
   loadTree: async () => {
     set({ treeLoading: true });
     try {
-      const tree = await getDrawingTree();
-      set({ tree, treeLoading: false });
+      const [tree, meta] = await Promise.all([getDrawingTree(), getMetadata()]);
+      set({ tree, treeLoading: false, projectName: meta.project.name });
 
       const firstDiscipline = Object.keys(tree)[0];
       if (firstDiscipline) {
@@ -227,6 +233,10 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
           drawingName: drawing.name,
           visible: isSelected,
           layers,
+          disciplinePolygon: discData.polygon,
+          regionPolygons: discData.regions
+            ? Object.entries(discData.regions).map(([name, r]) => ({ name, polygon: r.polygon }))
+            : undefined,
         } as DisciplineGroup;
       })
       .filter((g) => g.layers.length > 0);
