@@ -15,8 +15,11 @@ import type {
   Revision,
 } from '@/types';
 
-// 이미지 경로를 public 폴더 기준으로 변환
+// 이미지 경로를 public 폴더 기준으로 변환 (blob URL은 그대로 반환)
 export function getImageUrl(filename: string): string {
+  if (filename.startsWith('blob:') || filename.startsWith('http') || filename.startsWith('/')) {
+    return filename;
+  }
   return `/drawings/${filename}`;
 }
 

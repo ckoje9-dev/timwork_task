@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { DrawingTreeByDiscipline, DrawingSelection, Revision, ImageTransform } from '@/types';
+import type { DrawingTreeByDiscipline, DrawingSelection, DrawingTreeNode, Revision, ImageTransform } from '@/types';
 import { getDrawingTree, getDrawingById } from '@/api/drawings';
 
 export interface IssuePin {
@@ -72,6 +72,9 @@ interface DrawingState {
   issueVisible: boolean;
   issuePins: IssuePin[];
 
+  // 로컬(업로드/업데이트) 리비전 저장소 (key: `${drawingId}-${discipline}`)
+  localRevisions: Record<string, Revision[]>;
+
   // 액션
   loadTree: () => Promise<void>;
   selectDrawing: (drawingId: string, discipline: string, revisionVersion: string) => void;
@@ -85,6 +88,9 @@ interface DrawingState {
   expandDiscipline: (discipline: string) => void;
   toggleDisciplineGroup: (discipline: string) => void;
   setGroupLayerOpacity: (discipline: string, version: string, opacity: number) => void;
+  deleteDrawing: (drawingId: string, discipline: string) => void;
+  addDrawingToTree: (node: DrawingTreeNode) => void;
+  updateDrawingRevision: (drawingId: string, discipline: string, revision: Revision) => void;
 }
 
 export const useDrawingStore = create<DrawingState>((set) => ({
@@ -98,6 +104,7 @@ export const useDrawingStore = create<DrawingState>((set) => ({
   disciplineGroups: [],
   issueVisible: true,
   issuePins: [],
+  localRevisions: {},
 
   loadTree: async () => {
     set({ treeLoading: true });
@@ -128,7 +135,37 @@ export const useDrawingStore = create<DrawingState>((set) => ({
     const drawing = await getDrawingById(drawingId);
     set({ baseDrawingImage: drawing?.image ?? null });
 
-    if (!drawing?.disciplines) return;
+    if (!drawing?.disciplines) {
+      // metadata에 없는 도면 (업로드된 도면): localRevisions로 DisciplineGroup 구성
+      set((s) => {
+        const key = `${drawingId}-${discipline}`;
+        const revisions = s.localRevisions[key] ?? [];
+        if (revisions.length === 0) return {};
+
+        const colors = getDisciplineColors(discipline);
+        const node = s.tree[discipline]?.find((n) => n.drawingId === drawingId);
+        const sorted = [...revisions].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        );
+        const layers: LayerItem[] = sorted.map((rev, idx) => ({
+          revision: rev,
+          opacity: idx === 0 ? 1 : 0.6,
+          color: colors[idx % colors.length],
+          imageTransform: rev.imageTransform,
+        }));
+
+        return {
+          disciplineGroups: [{
+            discipline,
+            drawingName: node?.drawingName ?? drawingId,
+            visible: true,
+            layers,
+          }],
+          baseDrawingImage: sorted[0]?.image ?? null,
+        };
+      });
+      return;
+    }
 
     const groups: DisciplineGroup[] = Object.entries(drawing.disciplines)
       .map(([discName, discData]) => {
@@ -270,5 +307,94 @@ export const useDrawingStore = create<DrawingState>((set) => ({
           : g,
       ),
     }));
+  },
+
+  deleteDrawing: (drawingId, discipline) => {
+    set((s) => {
+      const newTree: DrawingTreeByDiscipline = {};
+      for (const [disc, nodes] of Object.entries(s.tree)) {
+        const filtered = nodes.filter(
+          (n) => !(n.drawingId === drawingId && disc === discipline),
+        );
+        if (filtered.length > 0) newTree[disc] = filtered;
+      }
+      const wasSelected =
+        s.selection?.drawingId === drawingId && s.selection?.discipline === discipline;
+      const key = `${drawingId}-${discipline}`;
+      const { [key]: _removed, ...remainingLocalRevisions } = s.localRevisions;
+      return {
+        tree: newTree,
+        localRevisions: remainingLocalRevisions,
+        ...(wasSelected
+          ? { selection: null, disciplineGroups: [], baseDrawingImage: null }
+          : {}),
+      };
+    });
+  },
+
+  addDrawingToTree: (node) => {
+    set((s) => {
+      const key = `${node.drawingId}-${node.discipline}`;
+      const newRevisions = node.latestRevision
+        ? [...(s.localRevisions[key] ?? []), node.latestRevision]
+        : (s.localRevisions[key] ?? []);
+      return {
+        tree: {
+          ...s.tree,
+          [node.discipline]: [...(s.tree[node.discipline] ?? []), node],
+        },
+        localRevisions: {
+          ...s.localRevisions,
+          [key]: newRevisions,
+        },
+      };
+    });
+  },
+
+  updateDrawingRevision: (drawingId, discipline, revision) => {
+    set((s) => {
+      // 트리 노드 latestRevision + revisionCount 업데이트
+      const newTree: DrawingTreeByDiscipline = {};
+      for (const [disc, nodes] of Object.entries(s.tree)) {
+        newTree[disc] = nodes.map((n) =>
+          n.drawingId === drawingId && disc === discipline
+            ? { ...n, latestRevision: revision, revisionCount: n.revisionCount + 1 }
+            : n,
+        );
+      }
+
+      // disciplineGroups에 새 레이어 맨 앞에 추가 (나머지는 opacity 0.6으로)
+      const colors = getDisciplineColors(discipline);
+      const newLayer: LayerItem = {
+        revision,
+        opacity: 1,
+        color: colors[0],
+        imageTransform: revision.imageTransform,
+      };
+      const newDisciplineGroups = s.disciplineGroups.map((g) =>
+        g.discipline === discipline
+          ? {
+              ...g,
+              layers: [newLayer, ...g.layers.map((l) => ({ ...l, opacity: 0.6 }))],
+            }
+          : g,
+      );
+
+      // localRevisions에 새 리비전 추가 (재선택 시 복원용)
+      const key = `${drawingId}-${discipline}`;
+      const newLocalRevisions = {
+        ...s.localRevisions,
+        [key]: [...(s.localRevisions[key] ?? []), revision],
+      };
+
+      return {
+        tree: newTree,
+        disciplineGroups: newDisciplineGroups,
+        localRevisions: newLocalRevisions,
+        selection: s.selection
+          ? { ...s.selection, revisionVersion: revision.version }
+          : null,
+      };
+    });
   },
 }));

@@ -5,21 +5,34 @@ import {
   ChevronDown,
   Upload,
   Download,
-  RefreshCw,
+  UploadCloud,
+  FolderDown,
   Trash2,
   Layers,
   Clock,
 } from 'lucide-react';
 import { useDrawingStore, type LayerItem } from '@/store/drawing.store';
-import type { DrawingSelection, DrawingTreeByDiscipline } from '@/types';
+import type { DrawingSelection, DrawingTreeByDiscipline, DrawingTreeNode, Revision } from '@/types';
+import { getImageUrl } from '@/api/drawings';
 import DrawingTree from '@/components/drawings/DrawingTree';
 import DrawingViewer from '@/components/drawings/DrawingViewer';
 import CompareModal from '@/components/drawings/CompareModal';
 
 export default function DrawingsPage() {
-  const { loadTree, selection, compareMode, disciplineGroups, tree, setCompareMode, setRevisionVersion, expandDiscipline, issueVisible, setIssueVisible } = useDrawingStore();
+  const {
+    loadTree, selection, compareMode, disciplineGroups, tree,
+    setCompareMode, setRevisionVersion, expandDiscipline,
+    issueVisible, setIssueVisible,
+    deleteDrawing, addDrawingToTree, updateDrawingRevision,
+  } = useDrawingStore();
   const [searchKeyword, setSearchKeyword] = useState('');
   const [filterDiscipline, setFilterDiscipline] = useState('전체');
+  const [uploadFiles, setUploadFiles] = useState<File[] | null>(null);
+  const [updateFile, setUpdateFile] = useState<File | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
+  const updateInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadTree();
@@ -33,24 +46,142 @@ export default function DrawingsPage() {
 
   const disciplines = ['전체', ...Object.keys(tree).filter((d) => d !== '전체')];
 
+  // ── 핸들러 ──────────────────────────────────────────────────
+
+  const handleUploadClick = () => uploadInputRef.current?.click();
+
+  const handleUploadFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length > 0) setUploadFiles(files);
+    e.target.value = '';
+  };
+
+  const handleDownload = () => {
+    if (!selection) return;
+    const group = disciplineGroups.find((g) => g.discipline === selection.discipline);
+    const layer =
+      group?.layers.find((l) => l.revision.version === selection.revisionVersion) ??
+      group?.layers[0];
+    if (!layer?.revision.image) return;
+    const a = document.createElement('a');
+    a.href = getImageUrl(layer.revision.image);
+    a.download = `${selection.drawingId}_${layer.revision.version}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleBulkDownload = async () => {
+    setIsBulkDownloading(true);
+    try {
+      const { default: JSZip } = await import('jszip');
+      const zip = new JSZip();
+      const tasks: Promise<void>[] = [];
+      for (const [disc, nodes] of Object.entries(tree)) {
+        if (disc === '전체') continue;
+        for (const node of nodes) {
+          if (!node.latestRevision?.image) continue;
+          const url = getImageUrl(node.latestRevision.image);
+          const safeName = node.drawingName.replace(/[/\\:*?"<>|]/g, '_');
+          const version = node.latestRevision.version;
+          tasks.push(
+            fetch(url)
+              .then((r) => r.blob())
+              .then((blob) => {
+                // MIME 타입으로 확장자 결정 (blob URL 포함)
+                const mime = blob.type || 'image/png';
+                const ext = mime.split('/')[1]?.replace('jpeg', 'jpg') ?? 'png';
+                zip.file(`${disc}/${safeName}_${version}.${ext}`, blob);
+              })
+              .catch(() => {}),
+          );
+        }
+      }
+      await Promise.all(tasks);
+      const content = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(content);
+      a.download = `도면_최신본_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+    } finally {
+      setIsBulkDownloading(false);
+    }
+  };
+
+  const handleUpdateClick = () => {
+    if (!selection) return;
+    updateInputRef.current?.click();
+  };
+
+  const handleUpdateFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setUpdateFile(file);
+    e.target.value = '';
+  };
+
+  const confirmDelete = () => {
+    if (selection) deleteDrawing(selection.drawingId, selection.discipline);
+    setShowDeleteConfirm(false);
+  };
+
+  const selectedDrawingName =
+    selection
+      ? (tree[selection.discipline]?.find((n) => n.drawingId === selection.drawingId)?.drawingName ?? selection.drawingId)
+      : '';
+
+  const selectedRevisionCount =
+    selection
+      ? (tree[selection.discipline]?.find((n) => n.drawingId === selection.drawingId)?.revisionCount ?? 0)
+      : 0;
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── 좌측 패널: 도면 트리 ────────────────────── */}
       <aside className="w-72 flex-shrink-0 flex flex-col border-r border-border bg-white">
         {/* 아이콘 툴바 */}
-        <div className="flex items-center gap-0.5 px-3 py-2 border-b border-border">
-          <ToolbarButton icon={<Upload size={15} />} label="업로드" />
-          <ToolbarButton icon={<Download size={15} />} label="다운로드" />
-          <ToolbarButton icon={<RefreshCw size={15} />} label="업데이트" />
-          <ToolbarButton icon={<Trash2 size={15} />} label="삭제" danger />
-          <div className="w-px h-4 bg-border mx-1" />
+        <div className="grid grid-cols-5 px-2 py-1.5 border-b border-border">
+          <ToolbarButton icon={<Upload size={15} />} label="업로드" onClick={handleUploadClick} />
+          <ToolbarButton icon={<Download size={15} />} label="다운로드" onClick={handleDownload} disabled={!selection} />
           <ToolbarButton
-            icon={<Layers size={15} />}
-            label="비교"
-            onClick={() => selection && setCompareMode(true)}
+            icon={<FolderDown size={15} className={isBulkDownloading ? 'animate-pulse' : ''} />}
+            label="전체다운"
+            onClick={handleBulkDownload}
+            disabled={isBulkDownloading}
+          />
+          <ToolbarButton
+            icon={<UploadCloud size={15} />}
+            label="업데이트"
+            onClick={handleUpdateClick}
+            disabled={!selection}
+          />
+          <ToolbarButton
+            icon={<Trash2 size={15} />}
+            label="삭제"
+            danger
+            onClick={() => setShowDeleteConfirm(true)}
             disabled={!selection}
           />
         </div>
+        {/* 히든 파일 인풋: 업로드 (복수, 이미지만) */}
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={handleUploadFileChange}
+        />
+        {/* 히든 파일 인풋: 업데이트 (단일, 이미지만) */}
+        <input
+          ref={updateInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleUpdateFileChange}
+        />
 
         {/* 검색 + 공종 드롭다운 */}
         <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
@@ -110,8 +241,20 @@ export default function DrawingsPage() {
                 />
               );
             })()}
-            {compareMode && (
-              <span className="pill bg-brand text-white">비교 모드</span>
+            {/* 도면 비교 버튼 */}
+            {selection && (
+              <button
+                onClick={() => setCompareMode(!compareMode)}
+                className={[
+                  'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border transition-colors',
+                  compareMode
+                    ? 'bg-brand text-white border-brand'
+                    : 'text-text-secondary border-border hover:text-text-primary hover:bg-surface-hover',
+                ].join(' ')}
+              >
+                <Layers size={13} />
+                {compareMode ? '비교 종료' : '비교'}
+              </button>
             )}
             {/* 이슈 토글 스위치 */}
             <div className="flex items-center gap-1.5">
@@ -140,6 +283,268 @@ export default function DrawingsPage() {
         <div className="flex-1 relative min-w-0 overflow-hidden">
           <DrawingViewer />
           <CompareModal />
+        </div>
+      </div>
+
+      {/* ── 업로드 모달 ──────────────────────────────── */}
+      {uploadFiles && (
+        <UploadModal
+          files={uploadFiles}
+          disciplines={disciplines.filter((d) => d !== '전체')}
+          onClose={() => setUploadFiles(null)}
+          onConfirm={(nodes) => {
+            nodes.forEach(addDrawingToTree);
+            setUploadFiles(null);
+          }}
+        />
+      )}
+
+      {/* ── 업데이트(새 리비전) 모달 ─────────────────── */}
+      {updateFile && selection && (
+        <UpdateRevisionModal
+          file={updateFile}
+          drawingName={selectedDrawingName}
+          currentRevisionCount={selectedRevisionCount}
+          onClose={() => setUpdateFile(null)}
+          onConfirm={(revision) => {
+            updateDrawingRevision(selection.drawingId, selection.discipline, revision);
+            setUpdateFile(null);
+          }}
+        />
+      )}
+
+      {/* ── 삭제 확인 모달 ───────────────────────────── */}
+      {showDeleteConfirm && selection && (
+        <DeleteConfirmModal
+          drawingName={selectedDrawingName}
+          onConfirm={confirmDelete}
+          onClose={() => setShowDeleteConfirm(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── 업로드 모달 ───────────────────────────────────────────────
+
+function UploadModal({
+  files,
+  disciplines,
+  onClose,
+  onConfirm,
+}: {
+  files: File[];
+  disciplines: string[];
+  onClose: () => void;
+  onConfirm: (nodes: DrawingTreeNode[]) => void;
+}) {
+  const [names, setNames] = useState<string[]>(
+    files.map((f) => f.name.replace(/\.[^.]+$/, '')),
+  );
+  const [discipline, setDiscipline] = useState(disciplines[0] ?? '');
+
+  const handleConfirm = () => {
+    if (!discipline) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const nodes: DrawingTreeNode[] = files.map((file, i) => ({
+      drawingId: `upload-${Date.now()}-${i}`,
+      drawingName: (names[i] ?? file.name).trim() || file.name,
+      discipline,
+      latestRevision: {
+        version: 'REV1',
+        image: URL.createObjectURL(file),
+        date: today,
+        description: '신규 업로드',
+        changes: [],
+      },
+      revisionCount: 1,
+    }));
+    onConfirm(nodes);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl w-[440px] p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold text-text-primary mb-4">
+          도면 업로드 ({files.length}개)
+        </h2>
+
+        {/* 파일별 도면명 입력 */}
+        <div className="mb-4 max-h-60 overflow-y-auto space-y-2 pr-1">
+          {files.map((file, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 w-32 flex-shrink-0 px-2 py-1.5 bg-surface rounded border border-border">
+                <Upload size={11} className="text-text-muted flex-shrink-0" />
+                <span className="text-[10px] text-text-muted truncate">{file.name}</span>
+              </div>
+              <input
+                type="text"
+                value={names[i] ?? ''}
+                onChange={(e) => {
+                  const next = [...names];
+                  next[i] = e.target.value;
+                  setNames(next);
+                }}
+                placeholder="도면명"
+                className="input flex-1 text-xs py-1.5"
+                autoFocus={i === 0}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* 공종 (공통) */}
+        <div className="mb-6">
+          <label className="text-xs text-text-muted block mb-1">공종 (전체 적용)</label>
+          <select
+            value={discipline}
+            onChange={(e) => setDiscipline(e.target.value)}
+            className="select w-full text-sm"
+          >
+            {disciplines.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn-ghost">취소</button>
+          <button
+            onClick={handleConfirm}
+            disabled={!discipline}
+            className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            업로드
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 업데이트(새 리비전) 모달 ──────────────────────────────────
+
+function UpdateRevisionModal({
+  file,
+  drawingName,
+  currentRevisionCount,
+  onClose,
+  onConfirm,
+}: {
+  file: File;
+  drawingName: string;
+  currentRevisionCount: number;
+  onClose: () => void;
+  onConfirm: (revision: Revision) => void;
+}) {
+  const nextVersion = `REV${currentRevisionCount + 1}`;
+  const [version, setVersion] = useState(nextVersion);
+  const [description, setDescription] = useState('');
+
+  const handleConfirm = () => {
+    const revision: Revision = {
+      version: version.trim() || nextVersion,
+      image: URL.createObjectURL(file),
+      date: new Date().toISOString().slice(0, 10),
+      description: description.trim(),
+      changes: [],
+    };
+    onConfirm(revision);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl w-96 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold text-text-primary mb-1">새 리비전 업데이트</h2>
+        <p className="text-xs text-text-muted mb-4">{drawingName}</p>
+
+        {/* 선택 파일 */}
+        <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-surface rounded-lg border border-border">
+          <UploadCloud size={13} className="text-text-muted flex-shrink-0" />
+          <span className="text-xs text-text-secondary truncate">{file.name}</span>
+        </div>
+
+        {/* 리비전 버전명 */}
+        <div className="mb-3">
+          <label className="text-xs text-text-muted block mb-1">리비전 버전</label>
+          <input
+            type="text"
+            value={version}
+            onChange={(e) => setVersion(e.target.value)}
+            placeholder={nextVersion}
+            className="input w-full text-sm"
+            autoFocus
+          />
+        </div>
+
+        {/* 변경 설명 */}
+        <div className="mb-6">
+          <label className="text-xs text-text-muted block mb-1">변경 내용</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="변경 사항을 입력하세요"
+            rows={3}
+            className="input resize-none w-full text-sm"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn-ghost">취소</button>
+          <button onClick={handleConfirm} className="btn-primary">업데이트</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 삭제 확인 모달 ────────────────────────────────────────────
+
+function DeleteConfirmModal({
+  drawingName,
+  onConfirm,
+  onClose,
+}: {
+  drawingName: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-xl w-80 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-sm font-semibold text-text-primary mb-2">도면 삭제</h2>
+        <p className="text-sm text-text-secondary mb-1">
+          <span className="font-medium text-text-primary">"{drawingName}"</span>을 삭제하시겠습니까?
+        </p>
+        <p className="text-xs text-text-muted mb-6">이 작업은 되돌릴 수 없습니다.</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn-ghost">
+            취소
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            삭제
+          </button>
         </div>
       </div>
     </div>
@@ -246,7 +651,7 @@ function ToolbarButton({
       onClick={onClick}
       disabled={disabled}
       className={[
-        'flex flex-col items-center gap-0.5 px-2 py-1.5 rounded text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+        'flex flex-col items-center justify-center gap-1 py-2 rounded text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
         danger
           ? 'text-status-urgent hover:bg-red-50'
           : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
