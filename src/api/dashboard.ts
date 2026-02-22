@@ -18,7 +18,7 @@ const MOCK_DASHBOARD: DashboardData = {
     completionDate: '2026-04-29',
   },
   building: {
-    location: '서울시 강서구 마곡동 9999',
+    location: '서울시 강서구 마곡동 60-1',
     siteArea: '9,999m²',
     purpose: '근린공공시설',
     scale: '지하2층 / 지상4층',

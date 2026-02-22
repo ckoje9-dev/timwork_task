@@ -94,16 +94,23 @@ export default function DashboardPage() {
 
         {/* 위치 (지도) */}
         <div className="card flex flex-col">
-          <div className="flex items-center gap-1.5 mb-3">
-            <MapPin size={14} className="text-brand" />
-            <span className="text-sm font-semibold text-text-primary">위치</span>
-          </div>
-          <div className="flex-1 bg-surface rounded border border-border flex items-center justify-center min-h-[180px]">
-            <div className="text-center text-text-muted">
-              <MapPin size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">서울시 강서구 마곡동 9999</p>
-              <p className="text-xs mt-1 opacity-60">지도 API 연동 영역</p>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-1.5">
+              <MapPin size={14} className="text-brand" />
+              <span className="text-sm font-semibold text-text-primary">위치</span>
             </div>
+            <span className="text-xs text-text-muted">{building.location}</span>
+          </div>
+          <div className="flex-1 rounded overflow-hidden border border-border min-h-[180px]">
+            <iframe
+              title="위치 지도"
+              src="https://maps.google.com/maps?q=%EC%84%9C%EC%9A%B8%ED%8A%B9%EB%B3%84%EC%8B%9C+%EA%B0%95%EC%84%9C%EA%B5%AC+%EB%A7%88%EA%B3%A1%EB%8F%9960-1&z=16&output=embed"
+              width="100%"
+              height="100%"
+              style={{ minHeight: '180px', border: 0 }}
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
           </div>
         </div>
       </div>
