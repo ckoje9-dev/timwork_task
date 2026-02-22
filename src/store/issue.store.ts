@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import type { Issue, IssueFilter } from '@/types';
 import { getIssues, getIssueById, getIssueGroups, createIssue as apiCreateIssue, deleteIssue as apiDeleteIssue } from '@/api/issues';
 import type { CreateIssueData } from '@/components/issues/IssueCreateModal';
+import { useRecentStore } from './recent.store';
+
+export interface BookmarkedIssueInfo {
+  id: string;
+  number: number;
+  title: string;
+}
 
 interface IssueState {
   issues: Issue[];
@@ -9,6 +16,8 @@ interface IssueState {
   selectedIssue: Issue | null;
   filter: IssueFilter;
   groups: string[];
+  /** key: issue.id, value: 표시용 정보 */
+  bookmarkedIssues: Map<string, BookmarkedIssueInfo>;
 
   // 액션
   loadIssues: () => Promise<void>;
@@ -19,6 +28,7 @@ interface IssueState {
   resetFilter: () => void;
   createIssue: (data: CreateIssueData) => Promise<Issue>;
   deleteIssue: (id: string) => Promise<void>;
+  toggleIssueBookmark: (info: BookmarkedIssueInfo) => void;
 }
 
 const DEFAULT_FILTER: IssueFilter = {
@@ -35,6 +45,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
   selectedIssue: null,
   filter: DEFAULT_FILTER,
   groups: [],
+  bookmarkedIssues: new Map<string, BookmarkedIssueInfo>(),
 
   loadIssues: async () => {
     set({ loading: true });
@@ -55,6 +66,15 @@ export const useIssueStore = create<IssueState>((set, get) => ({
   selectIssue: async (id) => {
     const issue = await getIssueById(id);
     set({ selectedIssue: issue });
+    if (issue) {
+      useRecentStore.getState().addRecentItem({
+        id: `issue-${issue.id}`,
+        label: `ISSUE#${issue.number} ${issue.title}`,
+        type: 'issue',
+        timestamp: new Date().toISOString(),
+        bookmarked: false,
+      });
+    }
   },
 
   clearSelectedIssue: () => set({ selectedIssue: null }),
@@ -80,5 +100,14 @@ export const useIssueStore = create<IssueState>((set, get) => ({
     await apiDeleteIssue(id);
     await get().loadIssues();
     await get().loadGroups();
+  },
+
+  toggleIssueBookmark: (info) => {
+    set((s) => {
+      const next = new Map(s.bookmarkedIssues);
+      if (next.has(info.id)) next.delete(info.id);
+      else next.set(info.id, info);
+      return { bookmarkedIssues: next };
+    });
   },
 }));

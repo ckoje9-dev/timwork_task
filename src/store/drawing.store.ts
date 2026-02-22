@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { DrawingTreeByDiscipline, DrawingSelection, DrawingTreeNode, Revision, ImageTransform } from '@/types';
 import { getDrawingTree, getDrawingById } from '@/api/drawings';
+import { useRecentStore } from './recent.store';
 
 export interface IssuePin {
   id: string;
@@ -95,7 +96,7 @@ interface DrawingState {
   updateIssuePinData: (pinId: string, issueId: string, title: string, issueNumber: number) => void;
 }
 
-export const useDrawingStore = create<DrawingState>((set) => ({
+export const useDrawingStore = create<DrawingState>((set, get) => ({
   tree: {},
   treeLoading: false,
   selection: null,
@@ -127,6 +128,19 @@ export const useDrawingStore = create<DrawingState>((set) => ({
   },
 
   selectDrawing: async (drawingId, discipline, revisionVersion) => {
+    // 최근 항목 기록
+    const s = get();
+    const node = s.tree[discipline]?.find((n) => n.drawingId === drawingId);
+    const drawingName = node?.drawingName ?? drawingId;
+    const isBookmarked = s.bookmarkedDrawings.has(`${drawingId}-${discipline}`);
+    useRecentStore.getState().addRecentItem({
+      id: `drawing-${drawingId}-${discipline}`,
+      label: `[${discipline}] ${drawingName}`,
+      type: 'drawing',
+      timestamp: new Date().toISOString(),
+      bookmarked: isBookmarked,
+    });
+
     // 선택된 공종 섹션을 자동으로 펼침
     set((s) => ({
       selection: { drawingId, discipline, revisionVersion },

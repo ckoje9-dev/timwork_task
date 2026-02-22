@@ -1,5 +1,6 @@
-import { X, ChevronDown, PlusCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { X, Bookmark, ChevronDown, PlusCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
+import { useIssueStore } from '@/store/issue.store';
 
 interface Props {
   issue: Issue;
@@ -42,6 +43,9 @@ const TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color:
 };
 
 export default function IssueDetailModal({ issue, onClose }: Props) {
+  const { bookmarkedIssues, toggleIssueBookmark } = useIssueStore();
+  const isBookmarked = bookmarkedIssues.has(issue.id);
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -62,9 +66,18 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
             })()}
             <span className="font-semibold">ISSUE#{issue.number}</span>
           </div>
-          <button onClick={onClose} className="btn-icon text-white/80 hover:text-white hover:bg-white/10">
-            <X size={18} />
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={() => toggleIssueBookmark({ id: issue.id, number: issue.number, title: issue.title })}
+              className="btn-icon text-white/80 hover:text-white hover:bg-white/10"
+              title={isBookmarked ? '북마크 해제' : '북마크'}
+            >
+              <Bookmark size={16} className={isBookmarked ? 'fill-white' : ''} />
+            </button>
+            <button onClick={onClose} className="btn-icon text-white/80 hover:text-white hover:bg-white/10">
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {/* 본문 */}

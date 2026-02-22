@@ -2,9 +2,26 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileStack, AlertCircle, Bookmark, MapPin } from 'lucide-react';
 import { getDashboard } from '@/api/dashboard';
-import type { DashboardData, RecentItem } from '@/types';
+import type { DashboardData } from '@/types';
 import DonutChart from '@/components/dashboard/DonutChart';
 import { useDrawingStore } from '@/store/drawing.store';
+import { useRecentStore } from '@/store/recent.store';
+import { useIssueStore } from '@/store/issue.store';
+
+function formatTimestamp(isoString: string): string {
+  const now = new Date();
+  const past = new Date(isoString);
+  const diffMs = now.getTime() - past.getTime();
+  const diffMin = Math.floor(diffMs / (1000 * 60));
+  const diffHour = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDay = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffMin < 1) return '방금 전';
+  if (diffMin < 60) return `${diffMin}분 전`;
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  if (diffDay === 1) return '어제';
+  return `${diffDay}일 전`;
+}
 
 const ISSUE_CHART_SEGMENTS = (stats: DashboardData['issueStats']) => [
   { value: stats.todo, color: '#F97316', label: '할일' },
@@ -28,7 +45,7 @@ export default function DashboardPage() {
     );
   }
 
-  const { project, building, issueStats, recentItems } = data;
+  const { project, building, issueStats } = data;
 
   return (
     <div className="p-6 space-y-5">
@@ -100,7 +117,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 최근 항목 / 북마크 탭 */}
-        <RecentItemsCard recentItems={recentItems} />
+        <RecentItemsCard />
       </div>
     </div>
   );
@@ -110,11 +127,13 @@ export default function DashboardPage() {
 
 type TabKey = 'recent' | 'bookmark';
 
-function RecentItemsCard({ recentItems }: { recentItems: RecentItem[] }) {
+function RecentItemsCard() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('recent');
 
+  const { recentItems } = useRecentStore();
   const { bookmarkedDrawings, tree, selectDrawing } = useDrawingStore();
+  const { bookmarkedIssues, selectIssue } = useIssueStore();
 
   // store 북마크에서 표시 항목 생성
   const storeBookmarks = useMemo(() => {
@@ -129,8 +148,6 @@ function RecentItemsCard({ recentItems }: { recentItems: RecentItem[] }) {
       return [{ key, drawingId, discipline, drawingName, latestRevision }];
     });
   }, [bookmarkedDrawings, tree]);
-
-  const displayItems = activeTab === 'recent' ? recentItems : null;
 
   return (
     <div className="card flex flex-col">
@@ -160,13 +177,18 @@ function RecentItemsCard({ recentItems }: { recentItems: RecentItem[] }) {
       <div className="space-y-1 flex-1 overflow-y-auto max-h-[252px]">
         {activeTab === 'recent' && (
           <>
-            {(displayItems ?? []).length === 0 ? (
+            {recentItems.length === 0 ? (
               <p className="text-xs text-text-muted py-4 text-center">항목이 없습니다</p>
             ) : (
-              (displayItems ?? []).map((item) => (
+              recentItems.map((item) => (
                 <button
                   key={item.id}
-                  onClick={() => navigate(item.type === 'drawing' ? '/drawings' : '/issues')}
+                  onClick={() => {
+                    if (item.type === 'issue') {
+                      selectIssue(item.id.replace(/^issue-/, ''));
+                    }
+                    navigate(item.type === 'drawing' ? '/drawings' : '/issues');
+                  }}
                   className="w-full flex items-center gap-2 p-2 rounded hover:bg-surface-hover text-left group"
                 >
                   <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
@@ -179,10 +201,12 @@ function RecentItemsCard({ recentItems }: { recentItems: RecentItem[] }) {
                   <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
                     {item.label}
                   </span>
-                  {item.bookmarked && (
+                  {(item.type === 'drawing' ? item.bookmarked : bookmarkedIssues.has(item.id.replace(/^issue-/, ''))) && (
                     <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
                   )}
-                  <span className="text-xs text-text-muted flex-shrink-0">{item.timestamp}</span>
+                  <span className="text-xs text-text-muted flex-shrink-0">
+                    {formatTimestamp(item.timestamp)}
+                  </span>
                 </button>
               ))
             )}
@@ -191,27 +215,47 @@ function RecentItemsCard({ recentItems }: { recentItems: RecentItem[] }) {
 
         {activeTab === 'bookmark' && (
           <>
-            {storeBookmarks.length === 0 ? (
-              <p className="text-xs text-text-muted py-4 text-center">북마크된 도면이 없습니다</p>
+            {storeBookmarks.length === 0 && bookmarkedIssues.size === 0 ? (
+              <p className="text-xs text-text-muted py-4 text-center">북마크된 항목이 없습니다</p>
             ) : (
-              storeBookmarks.map((bm) => (
-                <button
-                  key={bm.key}
-                  onClick={() => {
-                    selectDrawing(bm.drawingId, bm.discipline, bm.latestRevision?.version ?? '');
-                    navigate('/drawings');
-                  }}
-                  className="w-full flex items-center gap-2 p-2 rounded hover:bg-surface-hover text-left group"
-                >
-                  <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-                    <FileStack size={14} className="text-brand" />
-                  </div>
-                  <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
-                    <span className="text-text-muted">[{bm.discipline}]</span> {bm.drawingName}
-                  </span>
-                  <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
-                </button>
-              ))
+              <>
+                {storeBookmarks.map((bm) => (
+                  <button
+                    key={bm.key}
+                    onClick={() => {
+                      selectDrawing(bm.drawingId, bm.discipline, bm.latestRevision?.version ?? '');
+                      navigate('/drawings');
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-surface-hover text-left group"
+                  >
+                    <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                      <FileStack size={14} className="text-brand" />
+                    </div>
+                    <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
+                      <span className="text-text-muted">[{bm.discipline}]</span> {bm.drawingName}
+                    </span>
+                    <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
+                  </button>
+                ))}
+                {[...bookmarkedIssues.values()].map((bm) => (
+                  <button
+                    key={bm.id}
+                    onClick={() => {
+                      selectIssue(bm.id);
+                      navigate('/issues');
+                    }}
+                    className="w-full flex items-center gap-2 p-2 rounded hover:bg-surface-hover text-left group"
+                  >
+                    <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                      <AlertCircle size={14} className="text-status-urgent" />
+                    </div>
+                    <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
+                      ISSUE#{bm.number} {bm.title}
+                    </span>
+                    <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
+                  </button>
+                ))}
+              </>
             )}
           </>
         )}
