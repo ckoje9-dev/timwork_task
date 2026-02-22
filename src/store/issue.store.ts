@@ -45,7 +45,9 @@ export const useIssueStore = create<IssueState>((set, get) => ({
   selectedIssue: null,
   filter: DEFAULT_FILTER,
   groups: [],
-  bookmarkedIssues: new Map<string, BookmarkedIssueInfo>(),
+  bookmarkedIssues: new Map<string, BookmarkedIssueInfo>(
+    JSON.parse(localStorage.getItem('timwork-issue-bookmarks') ?? '[]') as [string, BookmarkedIssueInfo][]
+  ),
 
   loadIssues: async () => {
     set({ loading: true });
@@ -107,6 +109,7 @@ export const useIssueStore = create<IssueState>((set, get) => ({
       const next = new Map(s.bookmarkedIssues);
       if (next.has(info.id)) next.delete(info.id);
       else next.set(info.id, info);
+      localStorage.setItem('timwork-issue-bookmarks', JSON.stringify([...next.entries()]));
       return { bookmarkedIssues: next };
     });
   },

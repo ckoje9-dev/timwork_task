@@ -10,6 +10,7 @@ import {
   Trash2,
   Layers,
   Clock,
+  FileStack,
 } from 'lucide-react';
 import { useDrawingStore, type LayerItem } from '@/store/drawing.store';
 import type { DrawingSelection, DrawingTreeByDiscipline, DrawingTreeNode, Revision } from '@/types';
@@ -280,10 +281,22 @@ export default function DrawingsPage() {
         </div>
 
         {/* 도면 뷰어 (리비전 패널 제거 → 풀 너비) */}
-        <div className="flex-1 relative min-w-0 overflow-hidden">
-          <DrawingViewer />
-          <CompareModal />
-        </div>
+        {!selection ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-4 bg-surface/30">
+            <FileStack size={56} className="text-text-muted opacity-20" />
+            <div className="text-center">
+              <p className="text-sm font-medium text-text-muted">도면을 선택하세요</p>
+              <p className="text-xs text-text-muted/60 mt-1">
+                좌측 트리에서 도면을 클릭하면 여기에 표시됩니다
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 relative min-w-0 overflow-hidden">
+            <DrawingViewer />
+            <CompareModal />
+          </div>
+        )}
       </div>
 
       {/* ── 업로드 모달 ──────────────────────────────── */}

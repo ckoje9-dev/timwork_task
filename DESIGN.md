@@ -67,15 +67,15 @@ drawing > discipline  →  discipline > drawing
 ### 3. 레이아웃
 
 ```
-┌────────────┬─────────────────────────────────┬──────────────┐
-│  공종 트리  │       도면 뷰어 (줌/패닝)          │  리비전 패널  │
-│  (좌, 288px)│       (flex-1, 가변)              │  (우, 256px)  │
-└────────────┴─────────────────────────────────┴──────────────┘
+┌────────────┬─────────────────────────────────┐
+│  공종 트리  │       도면 뷰어 (줌/패닝)          │
+│  (좌, 288px)│       (flex-1, 가변)              │
+└────────────┴─────────────────────────────────┘
 ```
 
-3패널을 선택한 이유:
-- 탐색(트리), 확인(뷰어), 컨텍스트(리비전)를 한 화면에서 전환 없이 처리
-- 탐색 중에도 현재 리비전 이력이 항상 보임
+2패널 구조 (리비전 패널 → 상단 리비전 피커로 통합):
+- 탐색(트리)과 확인(뷰어)을 한 화면에서 전환 없이 처리
+- 리비전 이력은 상단 드롭다운으로 간소화하여 뷰어 공간 확보
 
 ### 4. CSS 구조
 
@@ -84,6 +84,71 @@ drawing > discipline  →  discipline > drawing
 - 컴포넌트 내부는 Tailwind 유틸리티 클래스 사용.
 
 이 구조는 "전체 테마 변경 → `tailwind.config.ts`", "공통 컴포넌트 스타일 → `index.css`", "레이아웃 → 컴포넌트 파일"로 역할이 분리되어 편집이 용이합니다.
+
+---
+
+## 상태 관리 설계
+
+### Zustand 스토어 구조
+
+```
+drawing.store.ts  — 도면 선택, 레이어, 비교 모드, 이슈 핀, 북마크
+issue.store.ts    — 이슈 목록, 선택된 이슈, 북마크
+recent.store.ts   — 최근 열람 항목 (도면·이슈 통합)
+```
+
+### 영속성 전략
+
+세 스토어 모두 localStorage를 사용해 새로고침 후에도 상태를 복원합니다.
+
+| localStorage 키 | 저장 내용 |
+|----------------|----------|
+| `timwork-drawing-bookmarks` | `string[]` — `${drawingId}-${discipline}` 배열 |
+| `timwork-issue-bookmarks` | `[string, BookmarkedIssueInfo][]` — Map entries 직렬화 |
+| `timwork-recent-items` | `RecentItem[]` — 최대 7개 |
+
+Set/Map은 JSON 직렬화가 불가하므로 배열로 변환하여 저장하고, 초기화 시 복원합니다.
+
+### 이슈 핀 연동
+
+`IssuePin.issueId` 필드로 도면 핀과 이슈를 양방향 연결합니다.
+
+- **핀 생성 → 이슈 생성**: `addIssuePin` 후 이슈 생성 모달에서 `updateIssuePinData`로 이슈 ID를 핀에 기록
+- **이슈 삭제**: IssueDetailModal에서 `issuePins.filter(p => p.issueId === issue.id)`로 연관 핀을 찾아 `removeIssuePin` 호출
+- **도면에서 보기**: `relatedPin`이 있으면 메타 패널에 버튼 표시, 클릭 시 `selectDrawing` + navigate
+
+순환 참조 방지: issue.store와 drawing.store가 서로를 직접 import하지 않고, IssueDetailModal 컴포넌트에서 두 store를 함께 사용합니다.
+
+---
+
+## Mock API 설계
+
+### 스위칭 구조
+
+```ts
+// src/api/client.ts
+const USE_MOCK_API = true; // false로 변경 시 실제 API 사용
+```
+
+각 API 함수는 `apiConfig.useMock` 플래그로 Mock/Real을 분기합니다:
+
+```ts
+export async function getIssues(params): Promise<Issue[]> {
+  if (apiConfig.useMock) return mockDelay(_getIssues(params));
+  return apiFetch<Issue[]>('/issues', { ... });
+}
+```
+
+### Mock과 실제 API 경계
+
+| 기능 | Mock 구현 | 실제 API 경로 |
+|------|----------|-------------|
+| 도면 트리 | `/metadata.json` fetch + 가공 | `GET /drawings/tree` |
+| 이슈 CRUD | `MOCK_ISSUES` 배열 인메모리 | `GET/POST/PUT/DELETE /issues` |
+| 이슈 통계 | MOCK_ISSUES 집계 | `GET /issues/stats` |
+| 도면 업로드 | drawing.store 직접 처리 (blob URL) | `POST /drawings` |
+| 도면 삭제 | drawing.store 직접 처리 | `DELETE /drawings/:id` |
+| 이슈 핀 | drawing.store 인메모리 | 백엔드 협의 필요 |
 
 ---
 
@@ -107,12 +172,16 @@ drawing > discipline  →  discipline > drawing
 
 2. **리비전 비교 시각화**: CSS `mix-blend-mode: multiply`로 도면 이미지를 오버레이하면 색상이 정확히 원하는 대로 나오지 않습니다. 실제로는 이미지 diff나 SVG 기반 변경 마킹이 더 적합합니다.
 
+3. **Set/Map 직렬화**: Zustand의 상태로 Set/Map을 사용할 경우 `JSON.stringify`가 빈 객체를 반환합니다. 배열로 변환해 저장하고 초기화 시 복원하는 패턴으로 해결했습니다.
+
 ### 시간이 더 주어진다면
 
 1. **배치도 폴리곤 클릭 네비게이션** — Canvas 위에 좌표 변환을 적용해 건물 영역을 클릭 가능한 영역으로 렌더링. 공간 탐색 진입점으로 활용.
 
 2. **도면 비교 품질 향상** — 두 이미지를 픽셀 단위로 diff하거나, 변경된 좌표(polygon)를 색상 하이라이트로 표시.
 
-3. **이슈 핀** — 도면 위에 이슈 위치를 좌표 기반으로 표시. 현재 데이터에 이슈 좌표가 없어, 백엔드 협의 필요.
+3. **이슈 핀 서버 저장** — 현재 핀은 클라이언트 인메모리 상태라 새로고침 시 사라집니다. 백엔드 API 연동 후 영속화 필요.
 
 4. **반응형 레이아웃** — 태블릿 현장 사용을 고려한 모바일 대응.
+
+5. **이슈 수정 기능** — 현재 이슈 생성·삭제만 지원. 상세 모달에서 인라인 편집 또는 수정 모달 추가 필요.

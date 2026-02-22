@@ -102,7 +102,9 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
   selection: null,
   baseDrawingImage: null,
   expandedDisciplines: new Set<string>(),
-  bookmarkedDrawings: new Set<string>(),
+  bookmarkedDrawings: new Set<string>(
+    JSON.parse(localStorage.getItem('timwork-drawing-bookmarks') ?? '[]') as string[]
+  ),
   compareMode: false,
   disciplineGroups: [],
   issueVisible: true,
@@ -254,6 +256,7 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       const next = new Set(s.bookmarkedDrawings);
       if (next.has(key)) next.delete(key);
       else next.add(key);
+      localStorage.setItem('timwork-drawing-bookmarks', JSON.stringify([...next]));
       return { bookmarkedDrawings: next };
     });
   },

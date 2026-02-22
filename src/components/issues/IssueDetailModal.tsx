@@ -1,6 +1,9 @@
-import { X, Bookmark, ChevronDown, PlusCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { X, Bookmark, Trash2, ChevronDown, PlusCircle, Pencil, AlertTriangle, FileStack } from 'lucide-react';
 import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
 import { useIssueStore } from '@/store/issue.store';
+import { useDrawingStore } from '@/store/drawing.store';
 
 interface Props {
   issue: Issue;
@@ -43,8 +46,30 @@ const TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color:
 };
 
 export default function IssueDetailModal({ issue, onClose }: Props) {
-  const { bookmarkedIssues, toggleIssueBookmark } = useIssueStore();
+  const navigate = useNavigate();
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const { bookmarkedIssues, toggleIssueBookmark, deleteIssue } = useIssueStore();
+  const { issuePins, removeIssuePin, selectDrawing } = useDrawingStore();
+
   const isBookmarked = bookmarkedIssues.has(issue.id);
+
+  // 이 이슈와 연결된 핀 (도면 위 핀에서 생성된 이슈)
+  const relatedPin = issuePins.find((p) => p.issueId === issue.id);
+
+  const handleDelete = async () => {
+    // 연결된 핀도 함께 제거
+    issuePins.filter((p) => p.issueId === issue.id).forEach((p) => removeIssuePin(p.id));
+    await deleteIssue(issue.id);
+    onClose();
+  };
+
+  const handleViewOnDrawing = () => {
+    if (!relatedPin) return;
+    selectDrawing(relatedPin.drawingId, relatedPin.discipline, relatedPin.revisionVersion);
+    navigate('/drawings');
+    onClose();
+  };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -67,6 +92,13 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
             <span className="font-semibold">ISSUE#{issue.number}</span>
           </div>
           <div className="flex items-center">
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="btn-icon text-white/80 hover:text-white hover:bg-white/10"
+              title="이슈 삭제"
+            >
+              <Trash2 size={15} />
+            </button>
             <button
               onClick={() => toggleIssueBookmark({ id: issue.id, number: issue.number, title: issue.title })}
               className="btn-icon text-white/80 hover:text-white hover:bg-white/10"
@@ -97,7 +129,7 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
             {issue.relatedDrawings.length > 0 && (
               <div className="mb-4">
                 <h3 className="text-sm font-semibold text-text-primary mb-2">
-                  해당 도면 (pill형식)
+                  해당 도면
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {issue.relatedDrawings.map((d) => (
@@ -168,9 +200,44 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
                 <MetaRow label="마감일" value={issue.dueDate} />
                 <MetaRow label="레이블" value={issue.labels.join(', ') || '—'} />
               </div>
+
+              {/* 도면 핀 연결 — 핀에서 생성된 이슈인 경우 표시 */}
+              {relatedPin && (
+                <>
+                  <div className="divider" />
+                  <button
+                    onClick={handleViewOnDrawing}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-brand bg-brand-muted hover:bg-brand/10 transition-colors"
+                  >
+                    <FileStack size={12} />
+                    도면에서 보기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
+
+        {/* 삭제 확인 바 */}
+        {showDeleteConfirm && (
+          <div className="border-t border-red-200 px-5 py-3 bg-red-50 flex items-center justify-between flex-shrink-0">
+            <p className="text-sm text-red-700 font-medium">이슈를 삭제하시겠습니까?</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="btn-ghost text-sm"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

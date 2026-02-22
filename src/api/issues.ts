@@ -6,7 +6,7 @@
  */
 
 import { mockDelay, apiConfig, apiFetch } from './client';
-import type { Issue, IssueFilter } from '@/types';
+import type { Issue, IssueFilter, IssueStats } from '@/types';
 
 // ── Mock 데이터 ──────────────────────────────────────────────
 
@@ -247,6 +247,20 @@ export async function deleteIssue(id: string): Promise<void> {
     return mockDelay(undefined);
   }
   return apiFetch<void>(`/issues/${id}`, { method: 'DELETE' });
+}
+
+export async function getIssueStats(): Promise<IssueStats> {
+  if (apiConfig.useMock) {
+    const all = _getIssues(); // 필터 없음 = 전체
+    return mockDelay({
+      total: all.length,
+      todo: all.filter((i) => i.status === 'TODO').length,
+      inProgress: all.filter((i) => i.status === 'IN_PROGRESS').length,
+      inReview: all.filter((i) => i.status === 'IN_REVIEW').length,
+      done: all.filter((i) => i.status === 'DONE').length,
+    });
+  }
+  return apiFetch<IssueStats>('/issues/stats');
 }
 
 export async function createIssue(

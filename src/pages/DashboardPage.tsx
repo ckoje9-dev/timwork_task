@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileStack, AlertCircle, Bookmark, MapPin } from 'lucide-react';
 import { getDashboard } from '@/api/dashboard';
-import type { DashboardData } from '@/types';
+import { getIssueStats } from '@/api/issues';
+import type { DashboardData, IssueStats } from '@/types';
 import DonutChart from '@/components/dashboard/DonutChart';
 import { useDrawingStore } from '@/store/drawing.store';
 import { useRecentStore } from '@/store/recent.store';
@@ -23,7 +24,7 @@ function formatTimestamp(isoString: string): string {
   return `${diffDay}일 전`;
 }
 
-const ISSUE_CHART_SEGMENTS = (stats: DashboardData['issueStats']) => [
+const ISSUE_CHART_SEGMENTS = (stats: IssueStats) => [
   { value: stats.todo, color: '#F97316', label: '할일' },
   { value: stats.inProgress, color: '#EAB308', label: '진행중' },
   { value: stats.inReview, color: '#10B981', label: '검토중' },
@@ -32,9 +33,11 @@ const ISSUE_CHART_SEGMENTS = (stats: DashboardData['issueStats']) => [
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [issueStats, setIssueStats] = useState<IssueStats | null>(null);
 
   useEffect(() => {
     getDashboard().then(setData);
+    getIssueStats().then(setIssueStats);
   }, []);
 
   if (!data) {
@@ -45,7 +48,7 @@ export default function DashboardPage() {
     );
   }
 
-  const { project, building, issueStats } = data;
+  const { project, building } = data;
 
   return (
     <div className="p-6 space-y-5">
@@ -110,10 +113,16 @@ export default function DashboardPage() {
         {/* 이슈 현황 도넛 차트 */}
         <div className="card">
           <h2 className="text-sm font-semibold text-text-primary mb-4">이슈 현황</h2>
-          <DonutChart
-            segments={ISSUE_CHART_SEGMENTS(issueStats)}
-            total={issueStats.total}
-          />
+          {issueStats ? (
+            <DonutChart
+              segments={ISSUE_CHART_SEGMENTS(issueStats)}
+              total={issueStats.total}
+            />
+          ) : (
+            <div className="flex items-center justify-center h-32">
+              <div className="spinner" />
+            </div>
+          )}
         </div>
 
         {/* 최근 항목 / 북마크 탭 */}
