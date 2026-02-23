@@ -376,7 +376,7 @@ export default function DrawingViewer() {
           })}
 
           {/* 리비전 폴리곤 오버레이 */}
-          {imageDimensions && (() => {
+          {imageDimensions && issueVisible && !compareMode && (() => {
             const currentGroup = disciplineGroups.find((g) => g.discipline === selection.discipline);
             if (!currentGroup) return null;
 
@@ -409,9 +409,8 @@ export default function DrawingViewer() {
                 .join(' ');
             };
 
-            if (!compareMode) {
-              // 일반 모드: 현재 레이어의 imageTransform으로 좌표 변환
-              const currentLayer =
+            // 현재 레이어의 imageTransform으로 좌표 변환
+            const currentLayer =
                 currentGroup.layers.find((l) => l.revision.version === selection.revisionVersion) ??
                 currentGroup.layers[0];
               const tx = currentLayer?.imageTransform;
@@ -484,79 +483,14 @@ export default function DrawingViewer() {
                   {elems}
                 </svg>
               );
-            }
-
-            // 비교 모드: 모든 가시 그룹의 모든 polygon을 baseTx 기준 pixel 공간으로 변환
-            if (!baseTx) return null;
-            const polygonElems: React.ReactNode[] = [];
-            const regionColors = ['#F59E0B', '#10B981', '#8B5CF6', '#EF4444'];
-            for (const group of disciplineGroups) {
-              if (!group.visible) continue;
-
-              // discipline polygon
-              if (group.disciplinePolygon) {
-                polygonElems.push(
-                  <polygon
-                    key={`disc-${group.discipline}`}
-                    points={toRevPx(group.disciplinePolygon.vertices, baseTx)}
-                    fill="none"
-                    stroke="#94A3B8"
-                    strokeWidth={2}
-                    strokeDasharray="8,5"
-                    strokeLinejoin="round"
-                    opacity={0.5}
-                  />,
-                );
-              }
-
-              // region polygons
-              group.regionPolygons?.forEach(({ name, polygon }, i) => {
-                polygonElems.push(
-                  <polygon
-                    key={`region-${group.discipline}-${name}`}
-                    points={toRevPx(polygon.vertices, baseTx)}
-                    fill="none"
-                    stroke={regionColors[i % regionColors.length]}
-                    strokeWidth={2}
-                    strokeDasharray="10,5"
-                    strokeLinejoin="round"
-                    opacity={0.6}
-                  />,
-                );
-              });
-
-              // revision polygons
-              for (const layer of group.layers) {
-                if (!layer.revision.polygon) continue;
-                polygonElems.push(
-                  <polygon
-                    key={`rev-${group.discipline}-${layer.revision.version}`}
-                    points={toRevPx(layer.revision.polygon.vertices, baseTx)}
-                    fill="none"
-                    stroke={layer.color}
-                    strokeWidth={4}
-                    strokeDasharray="16,8"
-                    strokeLinejoin="round"
-                    opacity={0.7}
-                  />,
-                );
-              }
-            }
-            if (polygonElems.length === 0) return null;
-            return (
-              <svg
-                style={{ position: 'absolute', top: 0, left: 0, width: imageDimensions.w, height: imageDimensions.h, pointerEvents: 'none' }}
-                viewBox={`0 0 ${imageDimensions.w} ${imageDimensions.h}`}
-              >
-                {polygonElems}
-              </svg>
-            );
           })()}
 
           {/* 확대평면도 region 네비게이션 폴리곤 (클릭 → 해당 region 도면으로 이동) */}
-          {imageDimensions && !compareMode && (() => {
+          {imageDimensions && issueVisible && !compareMode && (() => {
             // 가상 ID (확대평면도A/B 등): 네비게이션 폴리곤도 숨김
             if (selection.drawingId.includes(':')) return null;
+            // 건축 01_101동 지상1층 평면도에서만 표시
+            if (!(selection.drawingId === '01' && selection.discipline === '건축')) return null;
 
             const currentGroup = disciplineGroups.find((g) => g.discipline === selection.discipline);
             if (!currentGroup) return null;
@@ -661,7 +595,7 @@ export default function DrawingViewer() {
           })()}
 
           {/* 전체 배치도: 자식 도면 폴리곤 클릭 영역 */}
-          {selection?.drawingId === '00' && imageDimensions && childDrawings.length > 0 && (
+          {selection?.drawingId === '00' && imageDimensions && childDrawings.length > 0 && issueVisible && (
             <svg
               style={{
                 position: 'absolute',

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Search, Plus, RotateCcw, PlusCircle, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Search, Plus, RotateCcw, PlusCircle, Pencil, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useIssueStore } from '@/store/issue.store';
 import { useDrawingStore } from '@/store/drawing.store';
 import IssueDetailModal from '@/components/issues/IssueDetailModal';
@@ -52,6 +52,8 @@ const PRIORITY_LABEL: Record<IssuePriority, string> = {
   URGENT: '긴급',
 };
 
+const PAGE_SIZE = 10;
+
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
 export default function IssuesPage() {
@@ -73,11 +75,21 @@ export default function IssuesPage() {
 
   const [keywordInput, setKeywordInput] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     loadIssues();
     loadGroups();
   }, [loadIssues, loadGroups]);
+
+  // 필터 변경 시 첫 페이지로 초기화
+  useEffect(() => { setPage(1); }, [filter]);
+
+  const totalPages = Math.max(1, Math.ceil(issues.length / PAGE_SIZE));
+  const paginatedIssues = useMemo(
+    () => issues.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [issues, page],
+  );
 
   const handleKeywordSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,7 +217,7 @@ export default function IssuesPage() {
                   이슈가 없습니다
                 </div>
               ) : (
-                issues.map((issue) => (
+                paginatedIssues.map((issue) => (
                   <IssueRow
                     key={issue.id}
                     issue={issue}
@@ -215,11 +227,45 @@ export default function IssuesPage() {
               )}
             </div>
 
-            {/* 페이지네이션 플레이스홀더 */}
-            <div className="border-t border-border px-4 py-3 flex items-center justify-center">
-              <span className="text-sm text-text-muted">
-                총 {issues.length}건
+            {/* 페이지네이션 */}
+            <div className="border-t border-border px-4 py-2.5 flex items-center justify-between flex-shrink-0">
+              <span className="text-xs text-text-muted">
+                {issues.length > 0
+                  ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, issues.length)} / 총 ${issues.length}건`
+                  : '총 0건'}
               </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="btn-icon disabled:opacity-30"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+                {buildPageNumbers(page, totalPages).map((item, i) =>
+                  item === '...' ? (
+                    <span key={`ellipsis-${i}`} className="px-1 text-xs text-text-muted select-none">…</span>
+                  ) : (
+                    <button
+                      key={item}
+                      onClick={() => setPage(item as number)}
+                      className={`w-7 h-7 rounded text-xs font-medium transition-colors
+                        ${page === item
+                          ? 'bg-brand text-white'
+                          : 'text-text-secondary hover:bg-surface-hover'}`}
+                    >
+                      {item}
+                    </button>
+                  ),
+                )}
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="btn-icon disabled:opacity-30"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
             </div>
           </>
         )}
@@ -243,6 +289,20 @@ export default function IssuesPage() {
       )}
     </div>
   );
+}
+
+// ── 페이지 번호 배열 생성 (1, ..., n-1, n, n+1, ..., last) ───
+
+function buildPageNumbers(current: number, total: number): (number | '...')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | '...')[] = [1];
+  if (current > 3) pages.push('...');
+  for (let p = Math.max(2, current - 1); p <= Math.min(total - 1, current + 1); p++) {
+    pages.push(p);
+  }
+  if (current < total - 2) pages.push('...');
+  pages.push(total);
+  return pages;
 }
 
 // ── 유형 아이콘 컴포넌트 ──────────────────────────────────────

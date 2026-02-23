@@ -257,9 +257,9 @@ export default function DrawingsPage() {
                 {compareMode ? '비교 종료' : '비교'}
               </button>
             )}
-            {/* 이슈 토글 스위치 */}
+            {/* 주석 토글 스위치 */}
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-text-secondary">이슈</span>
+              <span className="text-xs text-text-secondary">주석</span>
               <button
                 role="switch"
                 aria-checked={issueVisible}
