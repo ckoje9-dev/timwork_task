@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { DrawingTreeByDiscipline, DrawingSelection, DrawingTreeNode, Revision, ImageTransform, DrawingPolygon } from '@/types';
 import { getDrawingTree, getDrawingById, getMetadata } from '@/api/drawings';
 import { useRecentStore } from './recent.store';
+import { compareExclusions } from '@/config/compareExclusions';
 
 export interface IssuePin {
   id: string;
@@ -272,7 +273,13 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       return 0;
     });
 
-    set({ disciplineGroups: groups });
+    // 비교 제외 공종 필터 (선택 공종 자신은 항상 포함)
+    const excluded = compareExclusions[realDrawingId] ?? [];
+    const filteredGroups = excluded.length > 0
+      ? groups.filter((g) => g.discipline === discipline || !excluded.includes(g.discipline))
+      : groups;
+
+    set({ disciplineGroups: filteredGroups });
   },
 
   toggleDiscipline: (discipline) => {

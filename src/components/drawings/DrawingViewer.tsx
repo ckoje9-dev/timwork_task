@@ -251,9 +251,9 @@ export default function DrawingViewer() {
           for (const layer of layers) {
             const overlayTx = layer.imageTransform;
             if (!overlayTx || baseTx.scale === 0 || overlayTx.scale === 0) continue;
-            const displayScale = baseTx.scale / overlayTx.scale;
-            const lx = baseTx.x - overlayTx.x * displayScale;
-            const ly = baseTx.y - overlayTx.y * displayScale;
+            const displayScale = overlayTx.scale / baseTx.scale;
+            const lx = (overlayTx.x - baseTx.x) / baseTx.scale;
+            const ly = (overlayTx.y - baseTx.y) / baseTx.scale;
             const hue = getHueRotate(layer.color);
             await drawLayer(
               layer.revision.image,
@@ -348,9 +348,9 @@ export default function DrawingViewer() {
               const overlayTx = layer.imageTransform;
               let cssTransform: string | undefined;
               if (baseTx && overlayTx && baseTx.scale !== 0 && overlayTx.scale !== 0) {
-                const displayScale = baseTx.scale / overlayTx.scale;
-                const lx = baseTx.x - overlayTx.x * displayScale;
-                const ly = baseTx.y - overlayTx.y * displayScale;
+                const displayScale = overlayTx.scale / baseTx.scale;
+                const lx = (overlayTx.x - baseTx.x) / baseTx.scale;
+                const ly = (overlayTx.y - baseTx.y) / baseTx.scale;
                 cssTransform = `translate(${lx}px, ${ly}px) scale(${displayScale})`;
               }
               return (
