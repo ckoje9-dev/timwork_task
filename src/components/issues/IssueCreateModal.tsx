@@ -23,6 +23,8 @@ interface Props {
   onClose: () => void;
   onSubmit: (data: CreateIssueData) => void;
   initialRelatedDrawings?: string[];
+  initialData?: Partial<CreateIssueData>;
+  submitLabel?: string;
 }
 
 // ── 상수 ─────────────────────────────────────────────────────
@@ -57,20 +59,22 @@ const STATUS_CLASS: Record<IssueStatus, string> = {
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
-export default function IssueCreateModal({ groups, onClose, onSubmit, initialRelatedDrawings }: Props) {
-  const [type, setType] = useState<IssueType>('추가');
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [status, setStatus] = useState<IssueStatus>('TODO');
-  const [priority, setPriority] = useState<IssuePriority>('MEDIUM');
-  const [assignee, setAssignee] = useState('');
-  const [reporter, setReporter] = useState('양승호');
-  const [group, setGroup] = useState('');
-  const [dueDate, setDueDate] = useState('');
+export default function IssueCreateModal({ groups, onClose, onSubmit, initialRelatedDrawings, initialData, submitLabel }: Props) {
+  const [type, setType] = useState<IssueType>(initialData?.type ?? '추가');
+  const [title, setTitle] = useState(initialData?.title ?? '');
+  const [content, setContent] = useState(initialData?.content ?? '');
+  const [status, setStatus] = useState<IssueStatus>(initialData?.status ?? 'TODO');
+  const [priority, setPriority] = useState<IssuePriority>(initialData?.priority ?? 'MEDIUM');
+  const [assignee, setAssignee] = useState(initialData?.assignee ?? '');
+  const [reporter, setReporter] = useState(initialData?.reporter ?? '양승호');
+  const [group, setGroup] = useState(initialData?.group ?? '');
+  const [dueDate, setDueDate] = useState(initialData?.dueDate ?? '');
   const [labelInput, setLabelInput] = useState('');
-  const [labels, setLabels] = useState<string[]>([]);
+  const [labels, setLabels] = useState<string[]>(initialData?.labels ?? []);
   const [drawingInput, setDrawingInput] = useState('');
-  const [relatedDrawings, setRelatedDrawings] = useState<string[]>(initialRelatedDrawings ?? []);
+  const [relatedDrawings, setRelatedDrawings] = useState<string[]>(
+    initialData?.relatedDrawings ?? initialRelatedDrawings ?? [],
+  );
 
   // 태그 추가 헬퍼
   const addTag = (
@@ -125,7 +129,7 @@ export default function IssueCreateModal({ groups, onClose, onSubmit, initialRel
         <div className="modal-header">
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 rounded-sm bg-white/20" />
-            <span className="font-semibold">새 이슈 생성</span>
+            <span className="font-semibold">{initialData ? '이슈 수정' : '새 이슈 생성'}</span>
           </div>
           <button
             onClick={onClose}
@@ -237,7 +241,7 @@ export default function IssueCreateModal({ groups, onClose, onSubmit, initialRel
                 disabled={!title.trim()}
                 className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                이슈 생성
+                {submitLabel ?? '이슈 생성'}
               </button>
             </div>
           </div>

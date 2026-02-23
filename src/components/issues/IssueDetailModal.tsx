@@ -4,6 +4,7 @@ import { X, Bookmark, Trash2, ChevronDown, PlusCircle, Pencil, AlertTriangle, Fi
 import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
 import { useIssueStore } from '@/store/issue.store';
 import { useDrawingStore } from '@/store/drawing.store';
+import IssueCreateModal from './IssueCreateModal';
 
 interface Props {
   issue: Issue;
@@ -45,11 +46,13 @@ const TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color:
   간섭: { icon: <AlertTriangle size={12} />, bg: 'bg-amber-500/15', color: 'text-amber-500', label: '간섭' },
 };
 
-export default function IssueDetailModal({ issue, onClose }: Props) {
+export default function IssueDetailModal({ issue: issueProp, onClose }: Props) {
   const navigate = useNavigate();
+  const [issue, setIssue] = useState<Issue>(issueProp);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  const { bookmarkedIssues, toggleIssueBookmark, deleteIssue } = useIssueStore();
+  const { bookmarkedIssues, toggleIssueBookmark, deleteIssue, updateIssue, groups, loadGroups } = useIssueStore();
   const { issuePins, removeIssuePin, selectDrawing } = useDrawingStore();
 
   const isBookmarked = bookmarkedIssues.has(issue.id);
@@ -71,7 +74,11 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
     onClose();
   };
 
+  // 그룹 목록 로드 (수정 모달에 필요)
+  const groupNames = groups;
+
   return (
+    <>
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-panel"
@@ -92,6 +99,13 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
             <span className="font-semibold">ISSUE#{issue.number}</span>
           </div>
           <div className="flex items-center">
+            <button
+              onClick={() => { loadGroups(); setShowEditModal(true); }}
+              className="btn-icon text-white/80 hover:text-white hover:bg-white/10"
+              title="이슈 수정"
+            >
+              <Pencil size={15} />
+            </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
               className="btn-icon text-white/80 hover:text-white hover:bg-white/10"
@@ -240,6 +254,32 @@ export default function IssueDetailModal({ issue, onClose }: Props) {
         )}
       </div>
     </div>
+    {showEditModal && (
+      <IssueCreateModal
+        groups={groupNames}
+        onClose={() => setShowEditModal(false)}
+        onSubmit={async (data) => {
+          const updated = await updateIssue(issue.id, data);
+          setIssue(updated);
+          setShowEditModal(false);
+        }}
+        initialData={{
+          type: issue.type,
+          title: issue.title,
+          content: issue.content,
+          status: issue.status,
+          priority: issue.priority,
+          assignee: issue.assignee,
+          reporter: issue.reporter,
+          group: issue.group ?? '',
+          labels: issue.labels,
+          dueDate: issue.dueDate,
+          relatedDrawings: issue.relatedDrawings,
+        }}
+        submitLabel="저장"
+      />
+    )}
+    </>
   );
 }
 

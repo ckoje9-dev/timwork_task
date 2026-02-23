@@ -263,6 +263,19 @@ export async function getIssueStats(): Promise<IssueStats> {
   return apiFetch<IssueStats>('/issues/stats');
 }
 
+export async function updateIssue(
+  id: string,
+  data: Omit<Issue, 'id' | 'number' | 'publishedAt'>,
+): Promise<Issue> {
+  if (apiConfig.useMock) {
+    const idx = MOCK_ISSUES.findIndex((i) => i.id === id);
+    if (idx === -1) throw new Error(`Issue not found: ${id}`);
+    MOCK_ISSUES[idx] = { ...MOCK_ISSUES[idx], ...data };
+    return mockDelay(MOCK_ISSUES[idx]);
+  }
+  return apiFetch<Issue>(`/issues/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
 export async function createIssue(
   data: Omit<Issue, 'id' | 'number' | 'publishedAt'>,
 ): Promise<Issue> {

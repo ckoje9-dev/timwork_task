@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Issue, IssueFilter } from '@/types';
-import { getIssues, getIssueById, getIssueGroups, createIssue as apiCreateIssue, deleteIssue as apiDeleteIssue } from '@/api/issues';
+import { getIssues, getIssueById, getIssueGroups, createIssue as apiCreateIssue, deleteIssue as apiDeleteIssue, updateIssue as apiUpdateIssue } from '@/api/issues';
 import type { CreateIssueData } from '@/components/issues/IssueCreateModal';
 import { useRecentStore } from './recent.store';
 
@@ -27,6 +27,7 @@ interface IssueState {
   setFilter: (patch: Partial<IssueFilter>) => void;
   resetFilter: () => void;
   createIssue: (data: CreateIssueData) => Promise<Issue>;
+  updateIssue: (id: string, data: CreateIssueData) => Promise<Issue>;
   deleteIssue: (id: string) => Promise<void>;
   toggleIssueBookmark: (info: BookmarkedIssueInfo) => void;
 }
@@ -93,6 +94,13 @@ export const useIssueStore = create<IssueState>((set, get) => ({
 
   createIssue: async (data) => {
     const issue = await apiCreateIssue(data);
+    await get().loadIssues();
+    await get().loadGroups();
+    return issue;
+  },
+
+  updateIssue: async (id, data) => {
+    const issue = await apiUpdateIssue(id, data);
     await get().loadIssues();
     await get().loadGroups();
     return issue;
