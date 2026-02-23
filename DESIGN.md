@@ -45,10 +45,10 @@ drawing > discipline  →  discipline > drawing
 | 공간 우선 (배치도 클릭) | 직관적인 지도 탐색, "어디"에 대한 질문에 강함 | 공종 횡단 탐색 불편, 배치도 없는 환경에서 불가 |
 | **공종 우선 (트리)** | 실무 워크플로 일치, "건축 도면 전부" 조회 용이 | 공간 컨텍스트 약함 |
 
-**선택: 공종 우선 트리 (메인) + 브레드크럼 (컨텍스트 보완)**
+**선택: 공종 우선 트리 (메인) + 공간 탐색 보완**
 
 현장 소장 김철수 씨는 "101동 건축 도면"을 찾기보다 "건축 공종 전체를 훑어야 하는" 경우가 더 많습니다.
-배치도 클릭 방식은 미완성으로 남기고, 추후 지도 탐색 탭으로 분리할 계획입니다.
+공간 탐색은 전체 배치도·101동 평면도의 폴리곤 클릭 네비게이션으로 보완했습니다.
 
 ### 2. 리비전 비교: 전환 vs 오버레이
 
@@ -63,6 +63,7 @@ drawing > discipline  →  discipline > drawing
 
 시나리오 3 ("REV1→REV3 변경 방향 논의")에 가장 적합합니다.
 각 레이어를 켜고 끄며 특정 변경 구간을 집중해서 볼 수 있습니다.
+비교 모드에서는 폴리곤 오버레이를 자동으로 숨겨 도면 가독성을 확보합니다.
 
 ### 3. 레이아웃
 
@@ -92,7 +93,7 @@ drawing > discipline  →  discipline > drawing
 ### Zustand 스토어 구조
 
 ```
-drawing.store.ts  — 도면 선택, 레이어, 비교 모드, 이슈 핀, 북마크
+drawing.store.ts  — 도면 선택, 레이어, 비교 모드, 이슈 핀, 북마크, 주석 표시
 issue.store.ts    — 이슈 목록, 선택된 이슈, 북마크
 recent.store.ts   — 최근 열람 항목 (도면·이슈 통합)
 ```
@@ -118,6 +119,69 @@ Set/Map은 JSON 직렬화가 불가하므로 배열로 변환하여 저장하고
 - **도면에서 보기**: `relatedPin`이 있으면 메타 패널에 버튼 표시, 클릭 시 `selectDrawing` + navigate
 
 순환 참조 방지: issue.store와 drawing.store가 서로를 직접 import하지 않고, IssueDetailModal 컴포넌트에서 두 store를 함께 사용합니다.
+
+---
+
+## 폴리곤 좌표계 설계
+
+### 좌표계 구조
+
+metadata.json의 polygon vertices는 **global 좌표계** (기준 PNG 픽셀 공간)에 저장됩니다.
+도면 뷰어에서 SVG로 렌더링하려면 **revision 이미지 픽셀 공간**으로 변환해야 합니다.
+
+```
+global 좌표 → revision 픽셀 좌표 변환:
+  dx = gx - tx.x
+  dy = gy - tx.y
+  px = (dx * cos(-θ) + dy * sin(-θ)) / tx.scale + imageWidth/2
+  py = (-dx * sin(-θ) + dy * cos(-θ)) / tx.scale + imageHeight/2
+```
+
+`imageTransform`의 `rotation` 필드를 역방향 회전(-θ)으로 적용해 이미지 좌표계로 맞춥니다.
+
+### 폴리곤 오버라이드 (`src/config/polygonOverrides.ts`)
+
+metadata.json 수정 없이 특정 도면·리비전의 폴리곤을 UI 레벨에서 교체하는 설정 파일입니다.
+
+```ts
+// null → 폴리곤 숨김 / 배열 → 커스텀 vertices 사용
+export const revisionPolygonOverrides: Record<string, Record<string, PolygonOverride>>
+```
+
+주민공동시설(09) 건축 도면에 적용:
+- REV1: `null` (초기 설계 — 변경 범위 없음)
+- REV2/REV3: 사용자 지정 사각형 좌표 (metadata의 건물 외곽선 대신 실제 변경 구역 표시)
+
+### 폴리곤 오버레이 레이어
+
+일반 모드(비교 모드 OFF)에서만 표시, 주석 토글로 일괄 제어:
+
+| 레이어 | 색상 | 의미 |
+|--------|------|------|
+| discipline polygon | 회색 점선 | 해당 공종 도면의 전체 커버리지 외곽선 |
+| region polygon | 색상 점선 (amber/green 등) | 도면 내 구역 경계 (A/B 분할 등) |
+| revision polygon | 파란 점선 + 연한 채우기 | 현재 리비전에서 변경된 범위 |
+
+### 가상 도면 ID (Virtual Drawing ID)
+
+Region별로 분리된 도면(구조 확대평면도A/B 등)은 `drawingId:regionKey` 형식의 가상 ID를 사용합니다.
+
+```
+"01:A"  →  101동 지상1층 평면도 중 구조 A구역
+"01:B"  →  101동 지상1층 평면도 중 구조 B구역
+```
+
+- 트리에서 독립적인 노드로 표시
+- 가상 ID 도면에서는 폴리곤 오버레이 숨김 (`:` 포함 여부로 판별)
+
+### 폴리곤 네비게이션
+
+클릭 가능한 SVG 폴리곤으로 도면 간 이동을 지원합니다:
+
+| 도면 | 네비게이션 대상 |
+|------|---------------|
+| 전체 배치도 (00) | childDrawings 기반, 건물 영역 클릭 → 해당 도면 |
+| 101동 지상1층 평면도 (01, 건축) | regionPolygons 기반, 구역 클릭 → 확대평면도A/B |
 
 ---
 
@@ -161,6 +225,7 @@ export async function getIssues(params): Promise<Issue[]> {
 | 라우팅 | React Router v6 | URL 기반 탭 전환으로 북마크·공유 가능. |
 | 차트 | SVG 직접 구현 | Chart.js/recharts 의존성 없이 도넛 차트만 필요. |
 | 아이콘 | Lucide React | Tree-shakable, 일관된 스타일. |
+| 지도 | Google Maps API | 현장 위치 핀 표시. |
 
 ---
 
@@ -168,20 +233,20 @@ export async function getIssues(params): Promise<Issue[]> {
 
 ### 어려웠던 점
 
-1. **Vertex 좌표계 이해**: `imageTransform`과 `polygonTransform`의 관계. 두 좌표계가 다른 기준점을 가지고 있어, 배치도 위에 폴리곤을 정확히 그리려면 행렬 변환이 필요합니다. 시간 내에 완성하지 못해 미완성으로 남았습니다.
+1. **Vertex 좌표계 변환**: `imageTransform`의 rotation 필드를 역행렬로 적용해 global 좌표를 revision 픽셀 공간으로 변환하는 수식 도출. `cos(-θ)/sin(-θ)` 역회전 공식으로 해결했습니다.
 
 2. **리비전 비교 시각화**: CSS `mix-blend-mode: multiply`로 도면 이미지를 오버레이하면 색상이 정확히 원하는 대로 나오지 않습니다. 실제로는 이미지 diff나 SVG 기반 변경 마킹이 더 적합합니다.
 
 3. **Set/Map 직렬화**: Zustand의 상태로 Set/Map을 사용할 경우 `JSON.stringify`가 빈 객체를 반환합니다. 배열로 변환해 저장하고 초기화 시 복원하는 패턴으로 해결했습니다.
 
-### 시간이 더 주어진다면
+4. **모달 레이어 순서**: 이슈 수정 모달이 상세 모달 아래에 렌더링되어 가려지는 문제. React portal 없이 JSX 렌더링 순서(나중에 오는 DOM이 더 위에 쌓임)로 해결했습니다.
 
-1. **배치도 폴리곤 클릭 네비게이션** — Canvas 위에 좌표 변환을 적용해 건물 영역을 클릭 가능한 영역으로 렌더링. 공간 탐색 진입점으로 활용.
+### 추가 개선 여지
+
+1. **이슈 핀 서버 저장** — 현재 핀은 클라이언트 인메모리 상태라 새로고침 시 사라집니다. 백엔드 API 연동 후 영속화 필요.
 
 2. **도면 비교 품질 향상** — 두 이미지를 픽셀 단위로 diff하거나, 변경된 좌표(polygon)를 색상 하이라이트로 표시.
 
-3. **이슈 핀 서버 저장** — 현재 핀은 클라이언트 인메모리 상태라 새로고침 시 사라집니다. 백엔드 API 연동 후 영속화 필요.
+3. **반응형 레이아웃** — 태블릿 현장 사용을 고려한 모바일 대응.
 
-4. **반응형 레이아웃** — 태블릿 현장 사용을 고려한 모바일 대응.
-
-5. **이슈 수정 기능** — 현재 이슈 생성·삭제만 지원. 상세 모달에서 인라인 편집 또는 수정 모달 추가 필요.
+4. **이슈 댓글 기능** — 현재 댓글 입력 UI는 있으나 기능 미구현.

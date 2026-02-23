@@ -17,6 +17,7 @@ npm run dev
 - **Zustand** — 전역 상태 관리
 - **Tailwind CSS v3** — 유틸리티 기반 스타일링
 - **Lucide React** — 아이콘
+- **Google Maps API** — 대시보드 현장 위치 지도
 
 ## 프로젝트 구조
 
@@ -25,11 +26,13 @@ src/
 ├── api/              # Mock API 레이어 (백엔드 연동 준비됨)
 │   ├── client.ts     # API 클라이언트 기반 + Mock/Real 스위치
 │   ├── drawings.ts   # 도면 API
-│   ├── issues.ts     # 이슈 API (getIssueStats 포함)
+│   ├── issues.ts     # 이슈 API (CRUD + getIssueStats)
 │   └── dashboard.ts  # 대시보드 API
+├── config/
+│   └── polygonOverrides.ts  # 리비전 폴리곤 UI 레벨 오버라이드 (metadata.json 미수정)
 ├── types/            # TypeScript 타입 정의 (공통)
 ├── store/            # Zustand 전역 상태
-│   ├── drawing.store.ts  # 도면 선택·북마크·레이어·이슈 핀 (localStorage 영속)
+│   ├── drawing.store.ts  # 도면 선택·북마크·레이어·이슈 핀·주석 표시 (localStorage 영속)
 │   ├── issue.store.ts    # 이슈 CRUD·북마크·선택 (localStorage 영속)
 │   └── recent.store.ts   # 최근 항목 기록 (localStorage 영속, 최대 7개)
 ├── components/
@@ -46,6 +49,7 @@ src/
 - [x] 공정률·공사비·착공일·준공일 카드
 - [x] 건축 개요 테이블
 - [x] 이슈 현황 도넛 차트 (실 데이터 연동 — getIssueStats())
+- [x] Google Maps 연동 — 현장 위치 지도 표시
 - [x] 최근 항목 탭 — 최근 열람한 도면·이슈 최대 7개 (localStorage 영속)
 - [x] 북마크 탭 — 북마크된 도면·이슈 목록, 클릭 시 바로 이동
 
@@ -53,7 +57,7 @@ src/
 - [x] 공종별 아코디언 트리, 키워드 검색, 공종 필터
 - [x] Empty State — 미선택 시 안내 화면
 - [x] 도면 뷰어 — 마우스 휠 줌, 드래그 패닝, Fit to screen
-- [x] 브레드크럼 — 현재 도면 컨텍스트 표시
+- [x] 브레드크럼 — 현재 도면 컨텍스트 표시 (프로젝트명 포함)
 - [x] 리비전 피커 — 드롭다운으로 리비전 전환
 - [x] 비교 모드 — 다중 리비전 레이어 오버레이, 투명도·가시성 조절
 - [x] 도면 업로드 (복수 파일, 공종 지정)
@@ -62,11 +66,18 @@ src/
 - [x] 도면 삭제 (확인 모달)
 - [x] 도면 북마크 (localStorage 영속)
 - [x] 이슈 핀 — 도면 위 좌표 기반 핀 표시, 클릭하여 이슈 생성
+- [x] **주석 토글** — 이슈 핀·폴리곤 오버레이 일괄 표시/숨김, 비교 모드에서는 자동 숨김
+- [x] **폴리곤 오버레이** — 공종 외곽선(회색 점선), 구역 경계(색상 점선), 리비전 커버리지(파란 점선) 표시
+- [x] **폴리곤 오버라이드** — `src/config/polygonOverrides.ts`로 metadata.json 수정 없이 특정 리비전의 폴리곤 교체
+- [x] **Region 가상 도면** — 구조 확대평면도A/B처럼 region별로 분리된 도면을 가상 ID(`drawingId:region`)로 별도 노드 생성
+- [x] **폴리곤 네비게이션** — 전체 배치도에서 건물 영역 클릭 → 해당 도면으로 이동, 101동 지상1층 평면도에서 구역 폴리곤 클릭 → 확대평면도로 이동
 
 ### 이슈 관리
-- [x] 이슈 목록 — 테이블 뷰, 키워드·상태·우선순위·그룹 필터
+- [x] 이슈 목록 — 테이블 뷰, 키워드·유형·상태·우선순위·그룹 필터
+- [x] 이슈 페이지네이션 — 10건씩 표시, 필터 변경 시 1페이지로 자동 이동
 - [x] 이슈 상세 모달 — 내용·연관 도면·메타 정보
 - [x] 이슈 생성 모달 (유형·상태·우선순위·담당자·마감일 등)
+- [x] **이슈 수정** — 상세 모달에서 수정 아이콘 클릭 → 기존 내용이 채워진 수정 폼 → 저장 시 즉시 반영
 - [x] 이슈 삭제 — 상세 모달에서 삭제 버튼 + 확인 UI
 - [x] 이슈 북마크 (localStorage 영속)
 - [x] 핀 연동 — 이슈 삭제 시 연관 도면 핀 자동 제거
@@ -81,7 +92,7 @@ src/
 | 이슈 통계 | Mock 인메모리 집계 | `GET /issues/stats` |
 | 대시보드 | Mock JSON | `GET /dashboard` |
 | 도면 업로드·삭제·리비전 업데이트 | drawing.store 직접 처리 | `POST /drawings`, `DELETE /drawings/:id`, `POST /drawings/:id/revisions` |
-| 이슈 핀 | 클라이언트 전용 | 핀 저장 API 협의 필요 |
+| 이슈 핀 | 클라이언트 전용 (인메모리) | 핀 저장 API 협의 필요 |
 
 ## 백엔드 연동 방법
 
@@ -105,9 +116,7 @@ VITE_API_BASE_URL=https://api.timwork.kr/v1
 
 ## 미완성 기능
 
-- [ ] 전체 배치도에서 건물 폴리곤 클릭 → 도면 진입 (Canvas 렌더링 필요)
-- [ ] 지도 API 연동 (대시보드 위치 표시)
-- [ ] 이슈 수정 폼
-- [ ] 사진대지 / 멤버 / 보안 탭 (기획 확정 후 구현 예정)
-- [ ] 페이지네이션
 - [ ] 이슈 댓글 기능
+- [ ] 사진대지 / 멤버 / 보안 탭 (기획 확정 후 구현 예정)
+- [ ] 이슈 핀 서버 저장 — 현재 인메모리 상태라 새로고침 시 초기화됨
+- [ ] 반응형 레이아웃 — 태블릿·모바일 현장 대응
