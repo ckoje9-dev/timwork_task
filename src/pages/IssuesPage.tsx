@@ -199,7 +199,7 @@ export default function IssuesPage() {
           <>
             {/* 헤더 행 */}
             <div className="grid grid-cols-[40px_80px_1fr_100px_80px_80px_70px_110px] gap-3
-                           px-4 py-2.5 border-b border-border bg-surface text-xs font-semibold text-text-muted uppercase tracking-wide">
+                           px-4 py-2.5 border-b border-brand bg-brand text-xs font-semibold text-white/80 uppercase tracking-wide">
               <div />
               <div>번호</div>
               <div>제목</div>
@@ -252,7 +252,7 @@ export default function IssuesPage() {
                       className={`w-7 h-7 rounded text-xs font-medium transition-colors
                         ${page === item
                           ? 'bg-brand text-white'
-                          : 'text-text-secondary hover:bg-surface-hover'}`}
+                          : 'text-text-secondary hover:bg-brand-light hover:text-brand'}`}
                     >
                       {item}
                     </button>
@@ -333,7 +333,7 @@ function IssueRow({ issue, onClick }: { issue: Issue; onClick: () => void }) {
     <button
       onClick={onClick}
       className="w-full grid grid-cols-[40px_80px_1fr_100px_80px_80px_70px_110px] gap-3
-                 px-4 py-3 border-b border-border text-left hover:bg-surface-hover
+                 px-4 py-3 border-b border-border text-left hover:bg-brand-light
                  transition-colors group"
     >
       {/* 유형 아이콘 */}

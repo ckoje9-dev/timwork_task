@@ -11,6 +11,7 @@ import {
   Layers,
   Clock,
   FileStack,
+  X,
 } from 'lucide-react';
 import { useDrawingStore, type LayerItem } from '@/store/drawing.store';
 import type { DrawingSelection, DrawingTreeByDiscipline, DrawingTreeNode, Revision } from '@/types';
@@ -381,12 +382,19 @@ function UploadModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-[440px] p-6"
+        className="bg-white rounded-xl shadow-modal w-[440px] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-text-primary mb-4">
-          도면 업로드 ({files.length}개)
-        </h2>
+        <div className="modal-header">
+          <div className="flex items-center gap-2">
+            <Upload size={15} />
+            <span className="font-semibold text-sm">도면 업로드 ({files.length}개)</span>
+          </div>
+          <button onClick={onClose} className="btn-icon text-white/80 hover:text-white hover:bg-white/10">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-6">
 
         {/* 파일별 도면명 입력 */}
         <div className="mb-4 max-h-60 overflow-y-auto space-y-2 pr-1">
@@ -436,6 +444,7 @@ function UploadModal({
             업로드
           </button>
         </div>
+        </div>
       </div>
     </div>
   );
@@ -477,11 +486,22 @@ function UpdateRevisionModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-96 p-6"
+        className="bg-white rounded-xl shadow-modal w-96 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-text-primary mb-1">새 리비전 업데이트</h2>
-        <p className="text-xs text-text-muted mb-4">{drawingName}</p>
+        <div className="modal-header">
+          <div className="flex items-center gap-2">
+            <UploadCloud size={15} />
+            <div>
+              <p className="font-semibold text-sm leading-tight">새 리비전 업데이트</p>
+              <p className="text-white/70 text-xs leading-tight">{drawingName}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="btn-icon text-white/80 hover:text-white hover:bg-white/10">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-6">
 
         {/* 선택 파일 */}
         <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-surface rounded-lg border border-border">
@@ -518,6 +538,7 @@ function UpdateRevisionModal({
           <button onClick={onClose} className="btn-ghost">취소</button>
           <button onClick={handleConfirm} className="btn-primary">업데이트</button>
         </div>
+        </div>
       </div>
     </div>
   );
@@ -540,24 +561,32 @@ function DeleteConfirmModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-80 p-6"
+        className="bg-white rounded-xl shadow-modal w-80 overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-semibold text-text-primary mb-2">도면 삭제</h2>
-        <p className="text-sm text-text-secondary mb-1">
-          <span className="font-medium text-text-primary">"{drawingName}"</span>을 삭제하시겠습니까?
-        </p>
-        <p className="text-xs text-text-muted mb-6">이 작업은 되돌릴 수 없습니다.</p>
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-ghost">
-            취소
+        <div className="flex items-center justify-between px-5 py-4 bg-red-600 text-white flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Trash2 size={15} />
+            <span className="font-semibold text-sm">도면 삭제</span>
+          </div>
+          <button onClick={onClose} className="btn-icon text-white/80 hover:text-white hover:bg-white/10">
+            <X size={18} />
           </button>
-          <button
-            onClick={onConfirm}
-            className="px-3 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-          >
-            삭제
-          </button>
+        </div>
+        <div className="p-6">
+          <p className="text-sm text-text-secondary mb-1">
+            <span className="font-medium text-text-primary">"{drawingName}"</span>을 삭제하시겠습니까?
+          </p>
+          <p className="text-xs text-text-muted mb-6">이 작업은 되돌릴 수 없습니다.</p>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="btn-ghost">취소</button>
+            <button
+              onClick={onConfirm}
+              className="px-3 py-1.5 text-xs font-semibold bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
+              삭제
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -677,7 +706,7 @@ function ToolbarButton({
         'flex flex-col items-center justify-center gap-1 py-2 rounded text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
         danger
           ? 'text-status-urgent hover:bg-red-50'
-          : 'text-text-secondary hover:bg-surface-hover hover:text-text-primary',
+          : 'text-text-secondary hover:bg-brand-light hover:text-brand',
       ].join(' ')}
     >
       {icon}

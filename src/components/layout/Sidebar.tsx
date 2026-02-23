@@ -10,11 +10,11 @@ import {
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: '대시보드', icon: LayoutDashboard },
-  { path: '/drawings', label: '도면', icon: FileStack },
-  { path: '/issues', label: '이슈', icon: AlertCircle },
-  { path: '/photos', label: '사진대지', icon: Image, disabled: true },
-  { path: '/members', label: '멤버', icon: Users, disabled: true },
-  { path: '/security', label: '보안', icon: ShieldCheck, disabled: true },
+  { path: '/drawings',  label: '도면',     icon: FileStack },
+  { path: '/issues',    label: '이슈',     icon: AlertCircle },
+  { path: '/photos',    label: '사진대지', icon: Image,      disabled: true },
+  { path: '/members',   label: '멤버',     icon: Users,      disabled: true },
+  { path: '/security',  label: '보안',     icon: ShieldCheck, disabled: true },
 ];
 
 export default function Sidebar() {
@@ -24,9 +24,9 @@ export default function Sidebar() {
     <aside className="w-sidebar flex-shrink-0 h-full bg-sidebar-bg border-r border-border flex flex-col">
       {/* 로고 */}
       <div className="h-header flex items-center px-5 border-b border-border">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded bg-brand flex items-center justify-center">
-            <span className="text-white text-xs font-bold">TW</span>
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded bg-accent flex items-center justify-center">
+            <span className="text-brand-dark text-xs font-bold tracking-tight">TW</span>
           </div>
           <span className="font-bold text-text-primary text-base tracking-tight">
             timwork
@@ -52,15 +52,18 @@ export default function Sidebar() {
             }
 
             return (
-              <li key={path}>
+              <li key={path} className="relative">
+                {isActive && (
+                  <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-accent" />
+                )}
                 <NavLink
                   to={path}
                   className={() =>
                     [
                       'flex items-center gap-3 px-3 py-2.5 rounded text-sm transition-colors duration-150',
                       isActive
-                        ? 'bg-sidebar-active text-sidebar-active-text font-medium'
-                        : 'text-sidebar-text hover:bg-surface-hover',
+                        ? 'bg-sidebar-active text-sidebar-active-text font-semibold'
+                        : 'text-sidebar-text hover:bg-sidebar-hover',
                     ].join(' ')
                   }
                 >

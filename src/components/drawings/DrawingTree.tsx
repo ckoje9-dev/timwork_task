@@ -72,9 +72,11 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
             {/* 공종 헤더 (아코디언) */}
             <button
               onClick={() => toggleDiscipline(discipline)}
-              className="w-full flex items-center gap-1.5 px-3 py-2 text-xs font-semibold
-                         text-text-secondary uppercase tracking-wide hover:bg-surface-hover
-                         transition-colors"
+              className={[
+                'w-full flex items-center gap-1.5 px-3 py-2 text-xs font-semibold',
+                'uppercase tracking-wide transition-colors hover:bg-brand-light',
+                isExpanded ? 'text-brand' : 'text-text-secondary hover:text-brand',
+              ].join(' ')}
             >
               {isExpanded ? (
                 <ChevronDown size={13} className="flex-shrink-0" />
@@ -99,14 +101,16 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
                   const isBookmarked = bookmarkedDrawings.has(bookmarkKey);
 
                   return (
-                    <li key={bookmarkKey} data-selected={isSelected ? 'true' : undefined}>
+                    <li key={bookmarkKey} data-selected={isSelected ? 'true' : undefined}
+                      className={isSelected ? 'border-l-[3px] border-accent' : 'border-l-[3px] border-transparent'}
+                    >
                       {/* 버튼 분리: 선택 영역 + 우측 북마크/배지 */}
                       <div
                         className={[
                           'group flex items-center transition-colors text-sm',
                           isSelected
-                            ? 'bg-brand-light text-brand font-medium'
-                            : 'text-text-secondary hover:bg-surface-hover',
+                            ? 'bg-brand-light text-brand font-semibold'
+                            : 'text-text-secondary hover:bg-brand-light hover:text-brand',
                         ].join(' ')}
                       >
                         {/* 선택 버튼 (flex-1) */}
@@ -136,13 +140,13 @@ export default function DrawingTree({ searchKeyword, filterDiscipline }: Props) 
                             className={[
                               'p-1 rounded transition-all',
                               isBookmarked
-                                ? 'text-brand opacity-100'
-                                : 'text-text-muted opacity-0 group-hover:opacity-100 hover:text-brand',
+                                ? 'text-accent opacity-100'
+                                : 'text-text-muted opacity-0 group-hover:opacity-100 hover:text-accent',
                             ].join(' ')}
                           >
                             <Bookmark
                               size={12}
-                              className={isBookmarked ? 'fill-brand' : ''}
+                              className={isBookmarked ? 'fill-accent' : ''}
                             />
                           </button>
                         </div>

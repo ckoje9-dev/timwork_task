@@ -7,7 +7,7 @@ export default function Header() {
     <header className="h-header flex-shrink-0 bg-white border-b border-border flex items-center justify-between px-5 z-10">
       {/* 프로젝트 선택 */}
       <div className="flex items-center gap-2">
-        <div className="w-5 h-5 rounded bg-brand" />
+        <div className="w-5 h-5 rounded bg-accent" />
         <button className="flex items-center gap-1.5 text-text-primary font-medium hover:text-brand transition-colors">
           <span className="text-sm">{projectName || 'Demo Project'}</span>
           <ChevronDown size={15} className="text-text-muted" />

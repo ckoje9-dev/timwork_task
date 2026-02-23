@@ -25,10 +25,10 @@ function formatTimestamp(isoString: string): string {
 }
 
 const ISSUE_CHART_SEGMENTS = (stats: IssueStats) => [
-  { value: stats.todo, color: '#F97316', label: '할일' },
-  { value: stats.inProgress, color: '#EAB308', label: '진행중' },
-  { value: stats.inReview, color: '#10B981', label: '검토중' },
-  { value: stats.done, color: '#2563EB', label: '완료' },
+  { value: stats.todo,       color: '#F97316', label: '할일' },
+  { value: stats.inProgress, color: '#ECB843', label: '진행중' },
+  { value: stats.inReview,   color: '#10B981', label: '검토중' },
+  { value: stats.done,       color: '#3E16BE', label: '완료' },
 ];
 
 export default function DashboardPage() {
@@ -219,7 +219,7 @@ function RecentItemsCard() {
                     {item.label}
                   </span>
                   {(item.type === 'drawing' ? item.bookmarked : bookmarkedIssues.has(item.id.replace(/^issue-/, ''))) && (
-                    <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
+                    <Bookmark size={12} className="text-accent fill-accent flex-shrink-0" />
                   )}
                   <span className="text-xs text-text-muted flex-shrink-0">
                     {formatTimestamp(item.timestamp)}
@@ -251,7 +251,7 @@ function RecentItemsCard() {
                     <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
                       <span className="text-text-muted">[{bm.discipline}]</span> {bm.drawingName}
                     </span>
-                    <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
+                    <Bookmark size={12} className="text-accent fill-accent flex-shrink-0" />
                   </button>
                 ))}
                 {[...bookmarkedIssues.values()].map((bm) => (
@@ -269,7 +269,7 @@ function RecentItemsCard() {
                     <span className="flex-1 text-xs text-text-secondary truncate group-hover:text-text-primary">
                       ISSUE#{bm.number} {bm.title}
                     </span>
-                    <Bookmark size={12} className="text-brand fill-brand flex-shrink-0" />
+                    <Bookmark size={12} className="text-accent fill-accent flex-shrink-0" />
                   </button>
                 ))}
               </>
@@ -293,9 +293,9 @@ function StatCard({
   accent?: boolean;
 }) {
   return (
-    <div className={`card ${accent ? 'border-brand' : ''}`}>
-      <p className="text-xs text-text-muted mb-2">{label}</p>
-      <p className={`text-xl font-bold truncate ${accent ? 'text-brand' : 'text-text-primary'}`}>
+    <div className={`card ${accent ? 'border-l-[3px] border-accent' : ''}`}>
+      <p className="text-xs text-text-muted mb-2 uppercase tracking-wide font-medium">{label}</p>
+      <p className={`text-2xl font-bold truncate ${accent ? 'text-brand' : 'text-text-primary'}`}>
         {value}
       </p>
     </div>

@@ -37,11 +37,11 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #d1d5db;
+    background: #c4b5fd;
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
+    background: #a78bfa;
   }
 }
 
@@ -94,7 +94,7 @@
     @apply pill bg-orange-50 text-orange-600;
   }
   .pill-medium {
-    @apply pill bg-blue-50 text-blue-600;
+    @apply pill bg-brand-muted text-brand;
   }
   .pill-low {
     @apply pill bg-gray-100 text-text-muted;
@@ -104,8 +104,8 @@
   .input {
     @apply w-full px-3 py-1.5 text-sm rounded border border-border
            bg-white text-text-primary placeholder:text-text-muted
-           focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent
-           transition-shadow duration-150;
+           focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand
+           transition-colors duration-150;
   }
 
   .select {
@@ -120,12 +120,12 @@
     @apply bg-white rounded-xl shadow-modal w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden;
   }
   .modal-header {
-    @apply flex items-center justify-between px-5 py-4 border-b border-border bg-brand text-white;
+    @apply flex items-center justify-between px-5 py-4 bg-brand text-white;
   }
 
   /* ── 로딩 스피너 ─────────────────────────────────── */
   .spinner {
-    @apply w-5 h-5 border-2 border-border border-t-brand rounded-full animate-spin;
+    @apply w-5 h-5 border-2 border-brand-muted border-t-brand rounded-full animate-spin;
   }
 
   /* ── 구분선 ──────────────────────────────────────── */
