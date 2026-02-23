@@ -136,6 +136,11 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
   },
 
   selectDrawing: async (drawingId, discipline, revisionVersion) => {
+    // 가상 ID 파싱: "01:A" → realId="01", regionFilter="A"
+    const colonIdx = drawingId.indexOf(':');
+    const realDrawingId = colonIdx >= 0 ? drawingId.slice(0, colonIdx) : drawingId;
+    const regionFilter = colonIdx >= 0 ? drawingId.slice(colonIdx + 1) : null;
+
     // 최근 항목 기록
     const s = get();
     const node = s.tree[discipline]?.find((n) => n.drawingId === drawingId);
@@ -156,13 +161,13 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
       expandedDisciplines: new Set([...s.expandedDisciplines, discipline]),
     }));
 
-    const drawing = await getDrawingById(drawingId);
+    const drawing = await getDrawingById(realDrawingId);
     set({ baseDrawingImage: drawing?.image ?? null });
 
     if (!drawing?.disciplines) {
       // metadata에 없는 도면 (업로드된 도면): localRevisions로 DisciplineGroup 구성
       set((s) => {
-        const key = `${drawingId}-${discipline}`;
+        const key = `${realDrawingId}-${discipline}`;
         const revisions = s.localRevisions[key] ?? [];
         if (revisions.length === 0) return {};
 
@@ -196,10 +201,21 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
         const isSelected = discName === discipline;
         const colors = getDisciplineColors(discName);
 
-        // 모든 리비전 수집 후 최신순 정렬
-        const revs: Revision[] = [...(discData.revisions ?? [])];
-        if (discData.regions) {
-          Object.values(discData.regions).forEach((r) => revs.push(...r.revisions));
+        // 리비전 수집: regionFilter가 있으면 해당 region만, 없으면 전체
+        const revs: Revision[] = [];
+        if (regionFilter && discData.regions?.[regionFilter]) {
+          // 특정 region만 — 버전명 suffix 제거 (REV1A → REV1)
+          discData.regions[regionFilter].revisions.forEach((r) =>
+            revs.push({ ...r, version: r.version.replace(/[A-Z]$/, '') }),
+          );
+        } else if (!regionFilter) {
+          revs.push(...(discData.revisions ?? []));
+          if (discData.regions) {
+            Object.values(discData.regions).forEach((r) => revs.push(...r.revisions));
+          }
+        } else {
+          // regionFilter 있지만 이 공종에는 해당 region 없음 → flat revisions만
+          revs.push(...(discData.revisions ?? []));
         }
         revs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -228,15 +244,23 @@ export const useDrawingStore = create<DrawingState>((set, get) => ({
           }];
         }
 
+        // polygon 데이터: disciplinePolygon = 전체 외곽, regionPolygons = 해당 region만
+        const regionPolygons = regionFilter && discData.regions
+          ? ([{ name: regionFilter, polygon: discData.regions[regionFilter]?.polygon }]
+              .filter((rp) => rp.polygon) as { name: string; polygon: DrawingPolygon }[])
+          : discData.regions
+            ? Object.entries(discData.regions)
+                .map(([name, r]) => ({ name, polygon: r.polygon }))
+                .filter((rp) => rp.polygon) as { name: string; polygon: DrawingPolygon }[]
+            : undefined;
+
         return {
           discipline: discName,
-          drawingName: drawing.name,
+          drawingName: regionFilter ? `${drawing.name}${regionFilter}` : drawing.name,
           visible: isSelected,
           layers,
           disciplinePolygon: discData.polygon,
-          regionPolygons: discData.regions
-            ? Object.entries(discData.regions).map(([name, r]) => ({ name, polygon: r.polygon }))
-            : undefined,
+          regionPolygons,
         } as DisciplineGroup;
       })
       .filter((g) => g.layers.length > 0);

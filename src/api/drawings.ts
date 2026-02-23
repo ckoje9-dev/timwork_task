@@ -78,16 +78,35 @@ async function _getDrawingTree(): Promise<DrawingTreeByDiscipline> {
     Object.entries(drawing.disciplines).forEach(([discipline, discData]) => {
       if (!tree[discipline]) tree[discipline] = [];
 
-      const revisions = _getAllRevisions(discData);
-      const latestRevision = revisions[revisions.length - 1] ?? null;
+      if (discData.regions && Object.keys(discData.regions).length > 0) {
+        // region이 있는 경우: region별로 별도 노드 생성 (가상 ID: drawingId:regionKey)
+        Object.entries(discData.regions).forEach(([regionKey, region]) => {
+          // 버전명에서 region suffix 제거 (REV1A → REV1, REV2B → REV2)
+          const revisions = [...region.revisions]
+            .map((r) => ({ ...r, version: r.version.replace(/[A-Z]$/, '') }))
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          const latestRevision = revisions[revisions.length - 1] ?? null;
 
-      tree[discipline].push({
-        drawingId: drawing.id,
-        drawingName: drawing.name,
-        discipline,
-        latestRevision,
-        revisionCount: revisions.length,
-      });
+          tree[discipline].push({
+            drawingId: `${drawing.id}:${regionKey}`,
+            drawingName: `${drawing.id}_${drawing.name.replace('평면도', '확대평면도')}${regionKey}`,
+            discipline,
+            latestRevision,
+            revisionCount: revisions.length,
+          });
+        });
+      } else {
+        const revisions = _getAllRevisions(discData);
+        const latestRevision = revisions[revisions.length - 1] ?? null;
+
+        tree[discipline].push({
+          drawingId: drawing.id,
+          drawingName: drawing.name,
+          discipline,
+          latestRevision,
+          revisionCount: revisions.length,
+        });
+      }
     });
   });
 

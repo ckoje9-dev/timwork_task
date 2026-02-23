@@ -6,6 +6,7 @@ import { useIssueStore } from '@/store/issue.store';
 import IssueCreateModal from '@/components/issues/IssueCreateModal';
 import IssueDetailModal from '@/components/issues/IssueDetailModal';
 import type { DrawingSelection, Drawing, Issue } from '@/types';
+import { revisionPolygonOverrides } from '@/config/polygonOverrides';
 
 interface Transform {
   x: number;
@@ -50,14 +51,17 @@ export default function DrawingViewer() {
     getChildDrawings('00').then(setChildDrawings);
   }, [selection?.drawingId]);
 
-  // 폴리곤 클릭 → 첫 번째 공종으로 navigate
+  // 폴리곤 클릭 → 첫 번째 공종으로 navigate (가상 ID 포함)
   const handlePolygonClick = useCallback(
     (drawingId: string) => {
       for (const [discipline, nodes] of Object.entries(tree)) {
         if (discipline === '전체') continue;
-        const node = nodes.find((n) => n.drawingId === drawingId);
+        // 정확한 매칭 또는 "drawingId:*" 가상 ID 매칭
+        const node = nodes.find(
+          (n) => n.drawingId === drawingId || n.drawingId.startsWith(`${drawingId}:`),
+        );
         if (node) {
-          selectDrawing(drawingId, discipline, node.latestRevision?.version ?? '');
+          selectDrawing(node.drawingId, discipline, node.latestRevision?.version ?? '');
           return;
         }
       }
@@ -376,6 +380,9 @@ export default function DrawingViewer() {
             const currentGroup = disciplineGroups.find((g) => g.discipline === selection.discipline);
             if (!currentGroup) return null;
 
+            // 가상 ID (확대평면도A/B 등): 모든 polygon overlay 숨김
+            if (selection.drawingId.includes(':')) return null;
+
             // polygon vertex는 global 좌표계(base PNG 픽셀 공간)에 저장됨
             // revision JPEG 픽셀 공간으로 변환:
             //   rev_px = (gx - tx.x) / tx.scale + imageWidth/2
@@ -385,11 +392,22 @@ export default function DrawingViewer() {
 
             const toRevPx = (
               vertices: [number, number][],
-              tx: { x: number; y: number; scale: number },
-            ) =>
-              vertices
-                .map(([gx, gy]) => `${(gx - tx.x) / tx.scale + W2},${(gy - tx.y) / tx.scale + H2}`)
+              tx: { x: number; y: number; scale: number; rotation?: number },
+            ) => {
+              const θ = tx.rotation ?? 0;
+              const cos_r = Math.cos(θ);
+              const sin_r = Math.sin(θ);
+              return vertices
+                .map(([gx, gy]) => {
+                  const dx = gx - tx.x;
+                  const dy = gy - tx.y;
+                  // 역회전(−θ) 후 역스케일 → 이미지 픽셀 공간
+                  const px = (dx * cos_r + dy * sin_r) / tx.scale + W2;
+                  const py = (-dx * sin_r + dy * cos_r) / tx.scale + H2;
+                  return `${px},${py}`;
+                })
                 .join(' ');
+            };
 
             if (!compareMode) {
               // 일반 모드: 현재 레이어의 imageTransform으로 좌표 변환
@@ -437,11 +455,17 @@ export default function DrawingViewer() {
               }
 
               // ③ revision polygon (현재 리비전 커버리지) — 파란 점선
-              if (currentLayer?.revision.polygon) {
+              // override가 정의된 경우 metadata 값 대신 사용 (null이면 숨김)
+              const revOverride = revisionPolygonOverrides[selection.drawingId]?.[currentLayer.revision.version];
+              const revPolyVertices =
+                revOverride !== undefined
+                  ? revOverride
+                  : (currentLayer?.revision.polygon?.vertices ?? null);
+              if (revPolyVertices) {
                 elems.push(
                   <polygon
                     key="rev"
-                    points={toRevPx(currentLayer.revision.polygon.vertices, tx)}
+                    points={toRevPx(revPolyVertices, tx)}
                     fill="rgba(37,99,235,0.06)"
                     stroke="#2563EB"
                     strokeWidth={6}
@@ -525,6 +549,113 @@ export default function DrawingViewer() {
                 viewBox={`0 0 ${imageDimensions.w} ${imageDimensions.h}`}
               >
                 {polygonElems}
+              </svg>
+            );
+          })()}
+
+          {/* 확대평면도 region 네비게이션 폴리곤 (클릭 → 해당 region 도면으로 이동) */}
+          {imageDimensions && !compareMode && (() => {
+            // 가상 ID (확대평면도A/B 등): 네비게이션 폴리곤도 숨김
+            if (selection.drawingId.includes(':')) return null;
+
+            const currentGroup = disciplineGroups.find((g) => g.discipline === selection.discipline);
+            if (!currentGroup) return null;
+            const currentLayer =
+              currentGroup.layers.find((l) => l.revision.version === selection.revisionVersion) ??
+              currentGroup.layers[0];
+            const tx = currentLayer?.imageTransform;
+            if (!tx) return null;
+
+            const W2 = imageDimensions.w / 2;
+            const H2 = imageDimensions.h / 2;
+            const θ = tx.rotation ?? 0;
+            const cos_r = Math.cos(θ);
+            const sin_r = Math.sin(θ);
+            const toPx = ([gx, gy]: [number, number]) => {
+              const dx = gx - tx.x;
+              const dy = gy - tx.y;
+              return { x: (dx * cos_r + dy * sin_r) / tx.scale + W2, y: (-dx * sin_r + dy * cos_r) / tx.scale + H2 };
+            };
+
+            // 실제 drawingId 파싱 (가상 ID "01:A" → "01")
+            const colonIdx = selection.drawingId.indexOf(':');
+            const realDrawingId = colonIdx >= 0 ? selection.drawingId.slice(0, colonIdx) : selection.drawingId;
+
+            // 다른 공종의 region polygon → 네비게이션 항목 수집
+            const navItems: {
+              id: string; virtualId: string; discipline: string;
+              pts: { x: number; y: number }[]; cx: number; cy: number;
+              drawingName: string; latestVersion: string;
+            }[] = [];
+
+            for (const group of disciplineGroups) {
+              if (!group.regionPolygons || group.regionPolygons.length === 0) continue;
+              group.regionPolygons.forEach(({ name, polygon }) => {
+                const virtualId = `${realDrawingId}:${name}`;
+                // 현재 선택과 동일한 항목은 skip
+                if (virtualId === selection.drawingId && group.discipline === selection.discipline) return;
+                const node = tree[group.discipline]?.find((n) => n.drawingId === virtualId);
+                if (!node) return;
+                const pts = polygon.vertices.map(toPx);
+                const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+                const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+                navItems.push({
+                  id: `nav-${group.discipline}-${name}`,
+                  virtualId,
+                  discipline: group.discipline,
+                  pts,
+                  cx,
+                  cy,
+                  drawingName: node.drawingName,
+                  latestVersion: node.latestRevision?.version ?? '',
+                });
+              });
+            }
+
+            if (navItems.length === 0) return null;
+
+            const navColors = ['#F59E0B', '#10B981', '#8B5CF6', '#EF4444'];
+            return (
+              <svg
+                style={{ position: 'absolute', top: 0, left: 0, width: imageDimensions.w, height: imageDimensions.h }}
+                viewBox={`0 0 ${imageDimensions.w} ${imageDimensions.h}`}
+              >
+                {navItems.map(({ id, virtualId, discipline, pts, cx, cy, drawingName, latestVersion }, i) => {
+                  const isHovered = hoveredPolygonId === id;
+                  const color = navColors[i % navColors.length];
+                  const pointsStr = pts.map((p) => `${p.x},${p.y}`).join(' ');
+                  return (
+                    <g
+                      key={id}
+                      style={{ cursor: 'pointer' }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClick={() => selectDrawing(virtualId, discipline, latestVersion)}
+                      onMouseEnter={() => setHoveredPolygonId(id)}
+                      onMouseLeave={() => setHoveredPolygonId(null)}
+                    >
+                      <polygon
+                        points={pointsStr}
+                        fill={isHovered ? `${color}38` : `${color}14`}
+                        stroke={color}
+                        strokeWidth={isHovered ? 6 : 3}
+                        strokeLinejoin="round"
+                        style={{ transition: 'fill 0.15s, stroke-width 0.15s' }}
+                      />
+                      <text
+                        x={cx}
+                        y={cy}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={26}
+                        fontWeight={600}
+                        fill={isHovered ? color : `${color}CC`}
+                        style={{ pointerEvents: 'none', userSelect: 'none' }}
+                      >
+                        {drawingName}
+                      </text>
+                    </g>
+                  );
+                })}
               </svg>
             );
           })()}
