@@ -121,6 +121,20 @@ export interface IssueFilter {
   type: IssueType | 'ALL';
 }
 
+export interface CreateIssueData {
+  type: IssueType;
+  title: string;
+  content: string;
+  status: IssueStatus;
+  priority: IssuePriority;
+  assignee: string;
+  reporter: string;
+  group: string | null;
+  labels: string[];
+  dueDate: string;
+  relatedDrawings: string[];
+}
+
 // ============================================================
 // Dashboard Types
 // ============================================================
@@ -168,12 +182,3 @@ export interface DashboardData {
   recentItems: RecentItem[];
 }
 
-// ============================================================
-// API Response Wrapper
-// ============================================================
-
-export interface ApiResponse<T> {
-  data: T;
-  success: boolean;
-  message?: string;
-}

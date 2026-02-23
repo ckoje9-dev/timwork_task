@@ -1,49 +1,22 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, Bookmark, Trash2, ChevronDown, PlusCircle, Pencil, AlertTriangle, FileStack } from 'lucide-react';
-import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
+import type { Issue, IssueType } from '@/types';
 import { useIssueStore } from '@/store/issue.store';
 import { useDrawingStore } from '@/store/drawing.store';
 import IssueCreateModal from './IssueCreateModal';
+import { STATUS_LABEL, STATUS_CLASS, PRIORITY_LABEL, PRIORITY_CLASS, ISSUE_TYPE_META } from '@/constants/issue';
 
 interface Props {
   issue: Issue;
   onClose: () => void;
 }
 
-const STATUS_LABEL: Record<IssueStatus, string> = {
-  TODO: 'TODO',
-  IN_PROGRESS: 'IN PROGRESS',
-  IN_REVIEW: 'IN REVIEW',
-  DONE: 'DONE',
-};
-
-const STATUS_CLASS: Record<IssueStatus, string> = {
-  TODO: 'pill-todo',
-  IN_PROGRESS: 'pill-in-progress',
-  IN_REVIEW: 'pill-in-review',
-  DONE: 'pill-done',
-};
-
-const PRIORITY_LABEL: Record<IssuePriority, string> = {
-  LOW: '낮음',
-  MEDIUM: '보통',
-  HIGH: '높음',
-  URGENT: '긴급',
-};
-
-const PRIORITY_CLASS: Record<IssuePriority, string> = {
-  LOW: 'pill-low',
-  MEDIUM: 'pill-medium',
-  HIGH: 'pill-high',
-  URGENT: 'pill-urgent',
-};
-
-const TYPE_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color: string; label: string }> = {
-  추가: { icon: <PlusCircle size={12} />, bg: 'bg-green-500/15', color: 'text-green-500', label: '추가' },
-  수정: { icon: <Pencil size={12} />, bg: 'bg-blue-500/15', color: 'text-blue-500', label: '수정' },
-  삭제: { icon: <Trash2 size={12} />, bg: 'bg-red-500/15', color: 'text-red-500', label: '삭제' },
-  간섭: { icon: <AlertTriangle size={12} />, bg: 'bg-amber-500/15', color: 'text-amber-500', label: '간섭' },
+const TYPE_ICONS: Record<IssueType, React.ReactNode> = {
+  추가: <PlusCircle size={12} />,
+  수정: <Pencil size={12} />,
+  삭제: <Trash2 size={12} />,
+  간섭: <AlertTriangle size={12} />,
 };
 
 export default function IssueDetailModal({ issue: issueProp, onClose }: Props) {
@@ -74,9 +47,6 @@ export default function IssueDetailModal({ issue: issueProp, onClose }: Props) {
     onClose();
   };
 
-  // 그룹 목록 로드 (수정 모달에 필요)
-  const groupNames = groups;
-
   return (
     <>
     <div className="modal-overlay" onClick={onClose}>
@@ -89,10 +59,10 @@ export default function IssueDetailModal({ issue: issueProp, onClose }: Props) {
         <div className="modal-header">
           <div className="flex items-center gap-2">
             {(() => {
-              const cfg = TYPE_CONFIG[issue.type];
+              const meta = ISSUE_TYPE_META[issue.type];
               return (
-                <div className={`w-5 h-5 rounded flex items-center justify-center ${cfg.bg} ${cfg.color}`}>
-                  {cfg.icon}
+                <div className={`w-5 h-5 rounded flex items-center justify-center ${meta.bg} ${meta.color}`}>
+                  {TYPE_ICONS[issue.type]}
                 </div>
               );
             })()}
@@ -190,11 +160,11 @@ export default function IssueDetailModal({ issue: issueProp, onClose }: Props) {
                 <MetaRow
                   label="유형"
                   value={(() => {
-                    const cfg = TYPE_CONFIG[issue.type];
+                    const meta = ISSUE_TYPE_META[issue.type];
                     return (
-                      <span className={`flex items-center gap-1 text-xs font-medium ${cfg.color}`}>
-                        {cfg.icon}
-                        {cfg.label}
+                      <span className={`flex items-center gap-1 text-xs font-medium ${meta.color}`}>
+                        {TYPE_ICONS[issue.type]}
+                        {meta.label}
                       </span>
                     );
                   })()}
@@ -256,7 +226,7 @@ export default function IssueDetailModal({ issue: issueProp, onClose }: Props) {
     </div>
     {showEditModal && (
       <IssueCreateModal
-        groups={groupNames}
+        groups={groups}
         onClose={() => setShowEditModal(false)}
         onSubmit={async (data) => {
           const updated = await updateIssue(issue.id, data);

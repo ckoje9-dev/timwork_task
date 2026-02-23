@@ -1,7 +1,6 @@
 import { create } from 'zustand';
-import type { Issue, IssueFilter } from '@/types';
+import type { Issue, IssueFilter, CreateIssueData } from '@/types';
 import { getIssues, getIssueById, getIssueGroups, createIssue as apiCreateIssue, deleteIssue as apiDeleteIssue, updateIssue as apiUpdateIssue } from '@/api/issues';
-import type { CreateIssueData } from '@/components/issues/IssueCreateModal';
 import { useRecentStore } from './recent.store';
 
 export interface BookmarkedIssueInfo {

@@ -5,6 +5,7 @@ import { useDrawingStore } from '@/store/drawing.store';
 import IssueDetailModal from '@/components/issues/IssueDetailModal';
 import IssueCreateModal from '@/components/issues/IssueCreateModal';
 import type { Issue, IssueStatus, IssuePriority, IssueType } from '@/types';
+import { STATUS_LABEL, STATUS_CLASS, PRIORITY_LABEL, PRIORITY_CLASS, ISSUE_TYPE_META } from '@/constants/issue';
 
 // ── 상수 ─────────────────────────────────────────────────────
 
@@ -23,34 +24,6 @@ const PRIORITY_OPTIONS: { value: IssuePriority | 'ALL'; label: string }[] = [
   { value: 'MEDIUM', label: '보통' },
   { value: 'LOW', label: '낮음' },
 ];
-
-const STATUS_LABEL: Record<IssueStatus, string> = {
-  TODO: 'TODO',
-  IN_PROGRESS: 'IN PROGRESS',
-  IN_REVIEW: 'IN REVIEW',
-  DONE: 'DONE',
-};
-
-const STATUS_CLASS: Record<IssueStatus, string> = {
-  TODO: 'pill-todo',
-  IN_PROGRESS: 'pill-in-progress',
-  IN_REVIEW: 'pill-in-review',
-  DONE: 'pill-done',
-};
-
-const PRIORITY_CLASS: Record<IssuePriority, string> = {
-  LOW: 'pill-low',
-  MEDIUM: 'pill-medium',
-  HIGH: 'pill-high',
-  URGENT: 'pill-urgent',
-};
-
-const PRIORITY_LABEL: Record<IssuePriority, string> = {
-  LOW: '낮음',
-  MEDIUM: '보통',
-  HIGH: '높음',
-  URGENT: '긴급',
-};
 
 const PAGE_SIZE = 10;
 
@@ -307,21 +280,21 @@ function buildPageNumbers(current: number, total: number): (number | '...')[] {
 
 // ── 유형 아이콘 컴포넌트 ──────────────────────────────────────
 
-const TYPE_ICON_CONFIG: Record<IssueType, { icon: React.ReactNode; bg: string; color: string; label: string }> = {
-  추가: { icon: <PlusCircle size={13} />, bg: 'bg-green-500/15', color: 'text-green-500', label: '추가' },
-  수정: { icon: <Pencil size={13} />, bg: 'bg-blue-500/15', color: 'text-blue-500', label: '수정' },
-  삭제: { icon: <Trash2 size={13} />, bg: 'bg-red-500/15', color: 'text-red-500', label: '삭제' },
-  간섭: { icon: <AlertTriangle size={13} />, bg: 'bg-amber-500/15', color: 'text-amber-500', label: '간섭' },
+const TYPE_ICONS: Record<IssueType, React.ReactNode> = {
+  추가: <PlusCircle size={13} />,
+  수정: <Pencil size={13} />,
+  삭제: <Trash2 size={13} />,
+  간섭: <AlertTriangle size={13} />,
 };
 
 function IssueTypeIcon({ type }: { type: IssueType }) {
-  const cfg = TYPE_ICON_CONFIG[type];
+  const meta = ISSUE_TYPE_META[type];
   return (
     <div
-      className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${cfg.bg} ${cfg.color}`}
-      title={cfg.label}
+      className={`w-6 h-6 rounded flex items-center justify-center flex-shrink-0 ${meta.bg} ${meta.color}`}
+      title={meta.label}
     >
-      {cfg.icon}
+      {TYPE_ICONS[type]}
     </div>
   );
 }

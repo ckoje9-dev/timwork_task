@@ -1,22 +1,7 @@
 import { useState, KeyboardEvent } from 'react';
 import { X, Plus } from 'lucide-react';
-import type { IssueStatus, IssuePriority, IssueType } from '@/types';
-
-// ── 타입 ─────────────────────────────────────────────────────
-
-export interface CreateIssueData {
-  type: IssueType;
-  title: string;
-  content: string;
-  status: IssueStatus;
-  priority: IssuePriority;
-  assignee: string;
-  reporter: string;
-  group: string | null;
-  labels: string[];
-  dueDate: string;
-  relatedDrawings: string[];
-}
+import type { IssueStatus, IssuePriority, IssueType, CreateIssueData } from '@/types';
+import { STATUS_CLASS, STATUS_OPTIONS, PRIORITY_OPTIONS_FORM } from '@/constants/issue';
 
 interface Props {
   groups: string[];
@@ -35,27 +20,6 @@ const TYPE_OPTIONS: { value: IssueType; label: string }[] = [
   { value: '삭제', label: '삭제' },
   { value: '간섭', label: '간섭' },
 ];
-
-const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
-  { value: 'TODO', label: 'TODO' },
-  { value: 'IN_PROGRESS', label: 'IN PROGRESS' },
-  { value: 'IN_REVIEW', label: 'IN REVIEW' },
-  { value: 'DONE', label: 'DONE' },
-];
-
-const PRIORITY_OPTIONS: { value: IssuePriority; label: string }[] = [
-  { value: 'URGENT', label: '긴급' },
-  { value: 'HIGH', label: '높음' },
-  { value: 'MEDIUM', label: '보통' },
-  { value: 'LOW', label: '낮음' },
-];
-
-const STATUS_CLASS: Record<IssueStatus, string> = {
-  TODO: 'pill-todo',
-  IN_PROGRESS: 'pill-in-progress',
-  IN_REVIEW: 'pill-in-review',
-  DONE: 'pill-done',
-};
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────
 
@@ -312,7 +276,7 @@ export default function IssueCreateModal({ groups, onClose, onSubmit, initialRel
                     onChange={(e) => setPriority(e.target.value as IssuePriority)}
                     className="select text-xs py-1 w-full"
                   >
-                    {PRIORITY_OPTIONS.map((o) => (
+                    {PRIORITY_OPTIONS_FORM.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
                       </option>

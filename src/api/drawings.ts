@@ -37,10 +37,6 @@ async function ensureMetadata(): Promise<Metadata> {
 
 // ── Mock 구현체 ──────────────────────────────────────────────
 
-async function _getMetadata(): Promise<Metadata> {
-  return ensureMetadata();
-}
-
 async function _getDrawings(): Promise<Record<string, Drawing>> {
   const m = await ensureMetadata();
   return m.drawings;
@@ -142,7 +138,7 @@ function _getAllRevisions(disciplineData: DrawingDiscipline): Revision[] {
 // ── Public API 함수 (Mock ↔ Real 스위칭) ─────────────────────
 
 export async function getMetadata(): Promise<Metadata> {
-  if (apiConfig.useMock) return mockDelay(await _getMetadata());
+  if (apiConfig.useMock) return mockDelay(await ensureMetadata());
   return apiFetch<Metadata>('/drawings/metadata');
 }
 
