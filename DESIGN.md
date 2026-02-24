@@ -254,24 +254,3 @@ ly = (overlayTx.y - baseTx.y) / baseTx.scale
 ```
 
 `scale` 필드는 "기준 이미지 픽셀 per 해당 이미지 픽셀"입니다. 건축(1,232px, scale ≈ 4.02)과 구조(4,962px, scale = 1)의 경우 `displayScale = 1 / 4.02 ≈ 0.248`이 되어 구조 PNG를 0.248배 축소하면 4962 × 0.248 ≈ 1,231px로 건축 이미지와 동일한 물리 크기가 됩니다.
-
----
-
-## Mock API 설계
-
-각 API 함수는 `apiConfig.useMock` 플래그로 Mock/Real을 분기합니다:
-
-```ts
-export async function getIssues(params): Promise<Issue[]> {
-  if (apiConfig.useMock) return mockDelay(_getIssues(params));
-  return apiFetch<Issue[]>('/issues', { ... });
-}
-```
-
-| 기능 | Mock 구현 | 실제 API 경로 |
-|------|----------|-------------|
-| 도면 트리 | `/metadata.json` fetch + 가공 | `GET /drawings/tree` |
-| 이슈 CRUD | `MOCK_ISSUES` 배열 인메모리 | `GET/POST/PUT/DELETE /issues` |
-| 이슈 통계 | MOCK_ISSUES 집계 | `GET /issues/stats` |
-| 도면 업로드 | drawing.store 직접 처리 (blob URL) | `POST /drawings` |
-| 이슈 핀 | drawing.store 인메모리 | 백엔드 협의 필요 |
